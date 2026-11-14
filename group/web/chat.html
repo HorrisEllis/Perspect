@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="perspect-contract" content="__PIN__">
+<title>Perspect — Chat</title><link rel="stylesheet" href="kit.css">
+<style>
+.feed{flex:1;overflow:auto;padding:10px 0}
+.msg{display:flex;gap:12px;padding:5px 16px;position:relative}.msg:hover{background:#13131a}.msg .body{min-width:0;flex:1}
+.msg .h{display:flex;gap:8px;align-items:baseline}.msg .h b{font-weight:600}.msg .h time{color:var(--faint);font-size:11.5px}
+.msg .role{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,106,0,.15);color:var(--fire)}
+.msg p{margin:2px 0 0;color:#d9d6d0;white-space:pre-wrap;word-wrap:break-word}.msg .ed{color:var(--faint);font-size:11px}
+.msg.cont{padding-top:0}.msg.cont .av{visibility:hidden;height:0}.msg.cont .h{display:none}
+.reply{font-size:12px;color:var(--faint);margin-bottom:2px}.reply b{color:var(--dim)}
+.acts{position:absolute;right:16px;top:-12px;display:none;background:var(--raise);border:1px solid var(--line);border-radius:6px}.msg:hover .acts{display:flex}
+.acts button{padding:4px 8px;color:var(--dim);font-size:13px}.acts button:hover{color:var(--text);background:var(--hover)}
+.reacts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}.reacts button{font-size:12px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);background:var(--raise);color:var(--dim)}
+.reacts button.mine{border-color:var(--cyan);color:var(--cyan)}.ce{height:18px;vertical-align:-4px}
+.kcard{margin-top:6px;max-width:560px}.oneway .hd{color:var(--violet)}.oneway .bd{font-style:italic;font-size:15px}.idea .hd{color:var(--green)}.prompt .hd{color:var(--amber)}.event .hd{color:var(--cyan)}
+.typing{height:18px;padding:0 16px;color:var(--faint);font-size:12px}
+.compose{padding:0 16px 16px;flex:none}.modes{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap}
+.mode{font-size:12px;padding:4px 10px;border-radius:6px;color:var(--dim)}.mode:hover{background:var(--hover)}.mode.on{background:var(--raise);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+.box{display:flex;align-items:flex-end;gap:8px;background:var(--raise);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px}
+.box textarea{flex:1;background:none;border:0;outline:0;resize:none;padding:8px 4px;max-height:160px}.box button{width:32px;height:32px;border-radius:6px;color:var(--dim);font-size:16px}.box button:hover{background:var(--hover);color:var(--text)}
+.ctx{font-size:12px;color:var(--dim);padding:4px 8px;display:flex;justify-content:space-between}
+.picker{position:absolute;bottom:64px;right:24px;background:var(--raise);border:1px solid var(--line);border-radius:var(--r);padding:8px;display:grid;grid-template-columns:repeat(8,32px);gap:2px;z-index:5}
+.picker button{height:32px;border-radius:6px;font-size:18px}.picker button:hover{background:var(--hover)}
+.more{text-align:center;padding:8px}
+</style></head><body>
+<div class="app wide" id="app">
+  <nav class="rail" id="rail"></nav><aside class="side" id="side"></aside>
+  <main class="main" style="position:relative">
+    <header class="top"><button class="btn g menu" style="display:none" onclick="document.getElementById('app').classList.toggle('nav')">☰</button>
+      <div class="t"><span class="ic" id="tic">#</span><span id="tname"></span></div><div class="d" id="tdesc"></div></header>
+    <div class="feed" id="feed"></div>
+    <div class="typing" id="typing"></div>
+    <div class="compose">
+      <div class="modes" id="modes">
+        <button class="mode on" data-m="msg">Message</button><button class="mode" data-m="oneway" title="Arrives with space: no replies for 10 minutes">One-way</button>
+        <button class="mode" data-m="idea" title="Others can build on it or fork it">✦ Idea</button><button class="mode" data-m="prompt" title="Draw a question to start something">❖ Prompt</button>
+      </div>
+      <div class="ctx" id="ctxline" hidden><span id="ctxtext"></span><button class="faint" id="ctxx">✕</button></div>
+      <div class="box"><textarea id="inp" rows="1" maxlength="8000"></textarea><button id="emo" title="Emoji">☺</button><button id="send" title="Send">➤</button></div>
+    </div>
+  </main>
+  <aside class="mem" id="mem"></aside>
+</div>
+<script src="/group/client.js"></script><script src="kit.js"></script>
+<script>
+PK.start('chat', async (ctx) => {
+  const { g, S, esc, av, nameOf, ago } = ctx, $ = (id) => document.getElementById(id);
+  let ch = S.channels.find(c => c.id === new URLSearchParams(location.search).get('c')) || S.channels.find(c => c.kind === 'text');
+  if (!ch) { $('feed').innerHTML = '<div class="pad muted">No channels you can see yet.</div>'; return; }
+  ctx.setChannel(ch.id); g.call('presence.set', { where: ch.id }).catch(() => {});
+  $('tic').textContent = ctx.IC[ch.kind]; $('tname').textContent = ch.name; $('tdesc').textContent = ch.topic; $('inp').placeholder = 'Message #' + ch.name;
+  let emojis = (await g.call('emoji.list')).emojis, msgs = [], more = false, mode = 'msg', ctxRef = null;   // ctxRef: { type: reply|edit|build|fork, msg }
+  const QUICK = ['👍', '❤️', '🔥', '😂', '💡', '🤔', '👏', '🙏', '✨', '😮', '😢', '⚔'];
+  const rich = (s) => esc(s).replace(/:([a-z0-9_]{2,32}):/g, (m, n) => { const e = emojis.find(x => x.name === n); return e ? `<img class="ce" alt=":${n}:" src="${e.image}">` : m; });
+  const roleName = (id) => (S.roles.find(r => r.id === (ctx.member(id) || {}).roleId) || {}).name;
+  function card(m) {
+    if (m.kind === 'oneway') { const open = m.repliesOpenAt && Date.now() < m.repliesOpenAt; return `<div class="card kcard oneway"><div class="hd">✉ One-way</div><div class="bd">${rich(m.body)}<div class="faint" style="font-style:normal;font-size:12px;margin-top:8px">${open ? 'For receiving, not reacting · replies open ' + new Date(m.repliesOpenAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Replies are open'}</div></div></div>`; }
+    if (m.kind === 'idea') { const src = m.buildsOn || m.forkOf; return `<div class="card kcard idea"><div class="hd">✦ ${m.buildsOn ? 'A piece of an idea' : m.forkOf ? 'A fork of an idea' : 'Idea · open to build on'}</div><div class="bd"><p style="margin:0 0 10px">${rich(m.body)}</p><div class="row">
+      <button class="btn p" data-a="build" data-id="${src || m.id}">Add the next piece</button><button class="btn g" data-a="fork" data-id="${src || m.id}">Fork it</button><a class="btn g" href="idea.html?m=${encodeURIComponent(src || m.id)}&c=${encodeURIComponent(ch.id)}">See the chain</a></div></div></div>`; }
+    if (m.kind === 'prompt') return `<div class="card kcard prompt"><div class="hd">❖ Prompt</div><div class="bd" style="font-size:15px">${rich(m.body)}</div></div>`;
+    if (m.kind === 'event') return `<div class="card kcard event"><div class="hd">◷ Event</div><div class="bd">${rich(m.body)}</div></div>`;
+    return '';
+  }
+  function one(m, prev) {
+    const cont = prev && prev.authorId === m.authorId && m.kind === 'msg' && prev.kind === 'msg' && !m.replyTo && m.createdAt - prev.createdAt < 5 * 60e3;
+    const reply = m.replyTo && msgs.find(x => x.id === m.replyTo);
+    const reacts = Object.entries(m.reactions || {}).map(([e, who]) => `<button data-a="react" data-id="${m.id}" data-e="${esc(e)}" class="${who.includes(S.me.id) ? 'mine' : ''}" title="${esc(who.map(nameOf).join(', '))}">${rich(e)} ${who.length}</button>`).join('');
+    const mine = m.authorId === S.me.id, rn = roleName(m.authorId);
+    return `<div class="msg ${cont ? 'cont' : ''}" id="m-${m.id}">${av(m.authorId)}<div class="body">
+      ${reply ? `<div class="reply">↳ <b>${esc(nameOf(reply.authorId))}</b> ${esc(reply.body.slice(0, 80))}</div>` : ''}
+      <div class="h"><b style="color:${ctx.colorOf(m.authorId)}">${esc(nameOf(m.authorId))}</b>${rn && rn !== 'Member' ? `<span class="role">${esc(rn.toUpperCase())}</span>` : ''}<time>${ago(m.createdAt)}</time></div>
+      ${m.kind === 'msg' ? `<p>${rich(m.body)}${m.editedAt ? ' <span class="ed">(edited)</span>' : ''}</p>` : card(m)}
+      ${reacts ? `<div class="reacts">${reacts}<button data-a="pick" data-id="${m.id}">＋</button></div>` : ''}</div>
+      <div class="acts"><button data-a="pick" data-id="${m.id}" title="React">☺</button><button data-a="reply" data-id="${m.id}" title="Reply">↩</button>${mine && m.kind === 'msg' ? `<button data-a="edit" data-id="${m.id}" title="Edit">✎</button>` : ''}${mine || ctx.can('message.manage') ? `<button data-a="del" data-id="${m.id}" title="Delete">🗑</button>` : ''}</div></div>`;
+  }
+  function render(keep) {
+    const f = $('feed'), atBottom = f.scrollHeight - f.scrollTop - f.clientHeight < 80, h = f.scrollHeight;
+    f.innerHTML = (more ? '<div class="more"><button class="btn g" data-a="older">Load older</button></div>' : '') + (msgs.length ? msgs.map((m, i) => one(m, msgs[i - 1])).join('') : `<div class="pad muted">This is the start of #${esc(ch.name)}. ${esc(ch.topic || '')}</div>`);
+    if (keep) f.scrollTop = f.scrollHeight - h; else if (atBottom || !render.done) f.scrollTop = f.scrollHeight; render.done = true;
+  }
+  const load = async (before) => { const r = await g.call('message.history', { channelId: ch.id, limit: 50, ...(before ? { before } : {}) }); msgs = before ? r.messages.concat(msgs) : r.messages; more = r.more; render(!!before); };
+  await load();
+  function renderMembers() {
+    const groups = {}; S.members.forEach(m => { const r = S.roles.find(x => x.id === m.roleId) || { name: 'Member', rank: 0 }; (groups[r.id] = groups[r.id] || { r, ms: [] }).ms.push(m); });
+    $('mem').innerHTML = Object.values(groups).sort((a, b) => b.r.rank - a.r.rank).map(({ r, ms }) => `<h4>${esc(r.name)} — ${ms.length}</h4>` + ms.map(m => {
+      const w = m.where && S.channels.find(c => c.id === m.where);
+      return `<div class="mrow ${m.status === 'offline' ? 'off' : ''}">${av(m.id, 1)}<div><div>${esc(m.name)}</div><small>${m.mood ? esc(m.mood.emoji + ' ' + (m.mood.note || '')) : w ? 'in #' + esc(w.name) : esc(m.note || m.status)}</small></div></div>`; }).join('')).join('');
+  }
+  renderMembers(); ['presence', 'member.joined', 'member.updated', 'member.left'].forEach(e => g.on(e, () => setTimeout(renderMembers)));
+  // live
+  g.on('message.new', d => { if (d.message.channelId !== ch.id) return; msgs.push(d.message); typers.delete(d.message.authorId); render(); showTyping(); });
+  g.on('message.edited', d => { const i = msgs.findIndex(m => m.id === d.message.id); if (i >= 0) { msgs[i] = d.message; render(); } });
+  g.on('message.deleted', d => { msgs = msgs.filter(m => m.id !== d.messageId); render(); });
+  g.on('reaction', d => { const m = msgs.find(x => x.id === d.messageId); if (m) { m.reactions = d.reactions; render(); } });
+  g.on('emoji.changed', d => { emojis = d.emojis; render(); });
+  const typers = new Map(); const showTyping = () => { const n = [...typers.keys()].map(nameOf); $('typing').textContent = n.length ? n.join(', ') + (n.length > 1 ? ' are' : ' is') + ' typing…' : ''; };
+  g.on('typing', d => { if (d.channelId !== ch.id) return; clearTimeout(typers.get(d.memberId)); typers.set(d.memberId, setTimeout(() => { typers.delete(d.memberId); showTyping(); }, 4000)); showTyping(); });
+  // composer
+  const setCtx = (type, msg) => { ctxRef = type ? { type, msg } : null; $('ctxline').hidden = !type; if (type) $('ctxtext').textContent = { reply: 'Replying to ' + nameOf(msg.authorId), edit: 'Editing your message', build: 'Adding a piece to the idea', fork: 'Forking the idea' }[type]; if (type === 'edit') $('inp').value = msg.body; if (type === 'build' || type === 'fork') setMode('idea'); $('inp').focus(); };
+  $('ctxx').onclick = () => { if (ctxRef && ctxRef.type === 'edit') $('inp').value = ''; setCtx(null); };
+  const setMode = async (m) => { mode = m; document.querySelectorAll('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    $('inp').placeholder = { msg: 'Message #' + ch.name, oneway: 'Say it with space: no replies for 10 minutes', idea: 'A half-built idea others can build on', prompt: 'Drawing a prompt…' }[m];
+    if (m === 'prompt') { const decks = ['connection', 'dreams', 'creativity', 'gratitude', 'spar'], r = await g.call('prompt.draw', { deck: decks[Math.floor(Math.random() * decks.length)] }); $('inp').value = r.prompt; $('inp').placeholder = 'Send it, or press ❖ Prompt again for another'; } };
+  $('modes').onclick = (e) => { const b = e.target.closest('.mode'); if (b) setMode(b.dataset.m); };
+  let lastTyping = 0; $('inp').oninput = () => { $('inp').style.height = 'auto'; $('inp').style.height = $('inp').scrollHeight + 'px'; if (Date.now() - lastTyping > 2500) { lastTyping = Date.now(); g.call('typing', { channelId: ch.id }).catch(() => {}); } };
+  async function send() {
+    const body = $('inp').value.trim(); if (!body) return;
+    try {
+      if (ctxRef && ctxRef.type === 'edit') await g.call('message.edit', { messageId: ctxRef.msg.id, body });
+      else await g.call('message.send', { channelId: ch.id, body, kind: mode, ...(ctxRef && ctxRef.type === 'reply' ? { replyTo: ctxRef.msg.id } : {}), ...(ctxRef && ctxRef.type === 'build' ? { buildsOn: ctxRef.msg.id } : {}), ...(ctxRef && ctxRef.type === 'fork' ? { forkOf: ctxRef.msg.id } : {}) });
+      $('inp').value = ''; $('inp').style.height = 'auto'; setCtx(null); if (mode !== 'msg') setMode('msg');
+    } catch (e) { ctx.toast(e.code === 'wait_first' ? 'That one-way message opens for replies at ' + new Date(e.data.repliesOpenAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : e.message); }
+  }
+  $('send').onclick = send; $('inp').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } if (e.key === 'Escape') setCtx(null); };
+  // emoji picker: quick set + the group's own
+  let pickFor = null; const closePick = () => { const p = document.querySelector('.picker'); if (p) p.remove(); };
+  function openPick(forId) { closePick(); pickFor = forId; const p = document.createElement('div'); p.className = 'picker';
+    p.innerHTML = QUICK.map(e => `<button data-e="${e}">${e}</button>`).join('') + emojis.map(e => `<button data-e=":${e.name}:" title=":${e.name}:"><img class="ce" src="${e.image}"></button>`).join('');
+    p.onclick = async (ev) => { const b = ev.target.closest('button'); if (!b) return; closePick(); if (pickFor) await g.call('reaction.toggle', { messageId: pickFor, emoji: b.dataset.e }); else { $('inp').value += b.dataset.e; $('inp').focus(); } };
+    document.querySelector('.main').appendChild(p); }
+  $('emo').onclick = (e) => { e.stopPropagation(); openPick(null); };
+  document.addEventListener('click', (e) => { if (!e.target.closest('.picker') && !e.target.closest('[data-a="pick"]') && e.target.id !== 'emo') closePick(); });
+  $('feed').onclick = async (e) => {
+    const b = e.target.closest('[data-a]'); if (!b) return; const m = msgs.find(x => x.id === b.dataset.id);
+    try {
+      if (b.dataset.a === 'react') await g.call('reaction.toggle', { messageId: b.dataset.id, emoji: b.dataset.e });
+      if (b.dataset.a === 'pick') { e.stopPropagation(); openPick(b.dataset.id); }
+      if (b.dataset.a === 'reply') setCtx('reply', m); if (b.dataset.a === 'edit') setCtx('edit', m);
+      if (b.dataset.a === 'build' || b.dataset.a === 'fork') setCtx(b.dataset.a, m || { id: b.dataset.id, authorId: '' });
+      if (b.dataset.a === 'del' && confirm('Delete this message?')) await g.call('message.delete', { messageId: b.dataset.id });
+      if (b.dataset.a === 'older') await load(msgs[0].seq);
+    } catch (err) { ctx.toast(err.message); }
+  };
+});
+</script></body></html>
