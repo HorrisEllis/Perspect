@@ -46,13 +46,28 @@ function createCore(opts) {
     if (rank >= rankOf(conn, me)) fail('not_allowed', 'a role must rank below your own');
     const mine = permsOf(conn, me); const extra = perms.filter(p => !mine.has(p)); if (extra.length) fail('not_allowed', 'you cannot grant what you do not hold: ' + extra.join(', '));
   };
+  function modAct(conn, me, t, kind, reason, until, quiet) {
+    const e = S.modlogAdd(t.id, kind, conn.cli ? 'cli' : me.id, reason, until); S.audit(conn.cli ? 'cli' : me.id, 'member.' + kind, t.id, { reason: reason || '', until: until || null });
+    if (!quiet) emitWhere('moderation', { entry: e }, (c, m) => m.id === t.id || can(c, m, 'member.moderate'));
+    return e;
+  }
   const channelOr404 = (id) => S.channel(id) || fail('not_found', 'no such channel');
   const memberOr404 = (id) => { const m = S.member(id); if (!m || m.removed) fail('not_found', 'no such member'); return m; };
 
   // ── what the outside sees ───────────────────────────────────────────────────────────────
-  const pubMember = (m) => ({ id: m.id, name: m.name, note: m.note, roleId: m.roleId, status: status.get(m.id) || (online(m.id) ? 'here' : 'offline'), mood: mood.get(m.id) || null, where: where.get(m.id) || null, joinedAt: m.joinedAt });
+  const pubMember = (m) => ({ id: m.id, name: m.name, note: m.note, about: m.about || '', color: m.color || null, roleId: m.roleId, status: status.get(m.id) || (online(m.id) ? 'here' : 'offline'), mood: mood.get(m.id) || null, where: where.get(m.id) || null, joinedAt: m.joinedAt });
   const presenceOf = (id) => ({ memberId: id, status: status.get(id) || (online(id) ? 'here' : 'offline'), mood: mood.get(id) || null, where: where.get(id) || null });
   const online = (id) => [...conns].some(c => c.memberId === id);
+  const activeUntil = (until) => (until && until > Date.now() ? until : null);
+  const adminMember = (m) => Object.assign(pubMember(m), { email: m.email || null, timeoutUntil: activeUntil(m.timeoutUntil), timeoutReason: activeUntil(m.timeoutUntil) ? m.timeoutReason : null,
+    bannedUntil: activeUntil(m.bannedUntil), banReason: activeUntil(m.bannedUntil) ? m.banReason : null, warnings: S.warnings(m.id), hasRecoveryPhrase: !!m.recoveryHash });
+  // to every live connection whose member passes a test (holds a permission, or is the one it is about)
+  function emitWhere(event, data, test) { for (const c of conns) { if (!c.memberId) continue; const m = S.member(c.memberId); if (m && test(c, m)) try { c.send(event, data); } catch (e) {} } }
+  const kick = (memberId, event, data) => { for (const c of [...conns]) if (c.memberId === memberId) { try { c.send(event, data); } catch (e) {} c.memberId = null; conns.delete(c); if (c.close) c.close(); } };
+  const PHRASE = (p) => String(p || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const phraseHash = (phrase, salt) => crypto.scryptSync(PHRASE(phrase), salt, 32, { N: 16384, r: 8, p: 1 }).toString('hex');
+  const attempts = new Map();              // memberId → [ms] of wrong phrases
+  const TIMED_OUT_BLOCKS = new Set(['message.send', 'message.edit', 'reaction.toggle', 'typing', 'voice.join', 'voice.signal', 'appreciate', 'nudge', 'spar.challenge', 'spar.accept', 'spar.turn', 'spar.rule_propose']);
   const viewable = (conn, m) => S.channels().filter(ch => can(conn, m, 'channel.view', ch));
   function emit(event, data, channel, except) {
     for (const c of conns) {
@@ -108,9 +123,10 @@ function createCore(opts) {
       let pubBytes; try { pubBytes = R.fromB64(a.pub); } catch (e) { pubBytes = []; } if (pubBytes.length !== 32) fail('bad_args', 'pub must be a 32-byte X25519 key, base64');
       const known = S.memberByPub(a.pub);
       if (known && known.removed) fail('removed', 'this key was removed from the group');
+      if (known && activeUntil(known.bannedUntil)) fail('banned', 'this key is banned', { until: known.bannedUntil, reason: known.banReason });
       if (!known) {
         const ownerless = !S.meta('ownerId');
-        if (!(ownerless && S.setupMatches(a.invite)) && !(a.invite && S.inviteGet(a.invite))) fail('invite_invalid', 'a new key needs a valid invite');
+        if (!(ownerless && S.setupMatches(a.invite)) && !(a.invite && (S.inviteGet(a.invite) || S.recoveryCodeGet(a.invite)))) fail('invite_invalid', 'a new key needs a valid invite');
       }
       const eph = R.generateEphemeral(), nonce = crypto.randomBytes(16), check = crypto.randomBytes(16);
       const key = R.hkdf(R.x25519(eph.priv, pubBytes), nonce, 'perspect-group-auth-v1', 32);
@@ -127,6 +143,13 @@ function createCore(opts) {
       if (proof.length !== p.check.length || !crypto.timingSafeEqual(proof, p.check)) fail('auth_failed', 'the proof did not match');
       let me = S.memberByPub(p.pub), joined = false;
       if (me && me.removed) fail('removed', 'this key was removed from the group');
+      const recovering = !me && S.recoveryCodeGet(p.invite);
+      if (recovering) {   // the account moves to this device: the new key replaces the old, everything else stays
+        const owner = S.member(recovering); if (!owner || owner.removed) fail('invite_invalid', 'that account is gone');
+        if (activeUntil(owner.bannedUntil)) fail('banned', 'this account is banned', { until: owner.bannedUntil, reason: owner.banReason });
+        kick(owner.id, 'removed', { reason: 'signed in on a new device' }); S.memberSet(owner.id, 'pub', p.pub); S.sessionsEnd(owner.id); S.recoveryCodeSpend(p.invite);
+        S.modlogAdd(owner.id, 'recovered', owner.id, 'moved to a new device'); S.audit(owner.id, 'recovery.used', owner.id, {}); me = S.member(owner.id);
+      }
       if (!me) {   // spend the invite only now, after the key is proven
         const name = (p.name || 'New member').slice(0, 40);
         if (!S.meta('ownerId') && S.setupMatches(p.invite)) { me = S.memberCreate(p.pub, name, 'owner'); S.meta('ownerId', me.id); S.setupSpend(); }
@@ -159,7 +182,62 @@ function createCore(opts) {
     },
     'invite.list'() { return { invites: S.invites() }; },
     'invite.revoke'(a, conn, me) { if (!S.inviteRevoke(a.code)) fail('not_found', 'no such invite'); audit(conn, me, 'invite.revoke', '', {}); return {}; },
-    'member.update_me'(a, conn, me) { if (!me) fail('not_allowed', 'the CLI is not a member'); const m = S.memberUpdate(me.id, { name: a.name, note: a.note }); emit('member.updated', { member: pubMember(m) }); return { me: pubMember(m) }; },
+    'member.update_me'(a, conn, me) { if (!me) fail('not_allowed', 'the CLI is not a member'); const m = S.memberUpdate(me.id, { name: a.name, note: a.note, about: a.about, color: a.color, email: a.email }); emit('member.updated', { member: pubMember(m) }); return { me: Object.assign(pubMember(m), { email: m.email }) }; },
+    'member.set_recovery_phrase'(a, conn, me) {
+      if (!me) fail('not_allowed', 'the CLI is not a member'); if (PHRASE(a.phrase).length < 12) fail('bad_args', 'at least 12 characters');
+      const salt = crypto.randomBytes(16).toString('hex'); S.memberSet(me.id, 'recoverySalt', salt); S.memberSet(me.id, 'recoveryHash', phraseHash(a.phrase, salt)); S.audit(me.id, 'member.set_recovery_phrase', me.id, {}); return {};
+    },
+    // ── administration: every action below someone's rank, every action logged ──
+    'member.get'(a, conn, me) { const t = memberOr404(a.memberId); return { member: adminMember(t), modlog: S.modlog(t.id, 100) }; },
+    'member.warn'(a, conn, me) { const t = memberOr404(a.memberId); outrank(conn, me, t); return { entry: modAct(conn, me, t, 'warn', a.reason) }; },
+    'member.timeout'(a, conn, me) {
+      const t = memberOr404(a.memberId); outrank(conn, me, t); const until = a.minutes ? Date.now() + a.minutes * 60e3 : null;
+      S.memberSet(t.id, 'timeoutUntil', until); S.memberSet(t.id, 'timeoutReason', a.reason || '');
+      if (until && voice.has(t.id)) { voice.delete(t.id); emit('voice.state', { channelId: null, memberId: t.id, joined: false }); }
+      const e = modAct(conn, me, t, until ? 'timeout' : 'untimeout', a.reason, until); emit('member.updated', { member: pubMember(S.member(t.id)) }); return { entry: e };
+    },
+    'member.ban'(a, conn, me) {
+      const t = memberOr404(a.memberId); outrank(conn, me, t); const until = a.hours ? Date.now() + a.hours * 3600e3 : 8.64e15;
+      S.memberSet(t.id, 'bannedUntil', until); S.memberSet(t.id, 'banReason', a.reason); S.sessionsEnd(t.id); voice.delete(t.id); status.delete(t.id);
+      const e = modAct(conn, me, t, 'ban', a.reason, until); kick(t.id, 'removed', { banned: true, until, reason: a.reason }); emit('member.left', { memberId: t.id }); return { entry: e };
+    },
+    'member.unban'(a, conn, me) { const t = S.member(a.memberId) || fail('not_found', 'no such member'); S.memberSet(t.id, 'bannedUntil', null); S.memberSet(t.id, 'banReason', null); return { entry: modAct(conn, me, t, 'unban', a.reason) }; },
+    'ban.list'() { return { bans: S.banned().map(adminMember) }; },
+    'member.reset'(a, conn, me) {
+      const t = memberOr404(a.memberId); outrank(conn, me, t);
+      if (a.what.includes('profile')) { S.memberUpdate(t.id, { name: 'Member', note: '', about: '', color: null }); mood.delete(t.id); }
+      if (a.what.includes('sessions')) { S.sessionsEnd(t.id); kick(t.id, 'removed', { reason: 'signed out by an admin; sign in again' }); }
+      modAct(conn, me, t, 'reset', (a.reason || '') + ' [' + a.what.join(', ') + ']'); const m = S.member(t.id);
+      emit('member.updated', { member: pubMember(m) }); return { member: adminMember(m) };
+    },
+    'member.set_email'(a, conn, me) { const t = memberOr404(a.memberId); if (t.roleId === 'owner' && !isOwner(conn, me)) fail('not_allowed', 'only the owner changes their own email'); S.memberUpdate(t.id, { email: a.email || null }); modAct(conn, me, t, 'email', 'changed', null, true); return { member: adminMember(S.member(t.id)) }; },
+    'recovery.issue'(a, conn, me) {
+      const t = memberOr404(a.memberId); if (t.roleId === 'owner' && !isOwner(conn, me)) fail('not_allowed', 'only the owner recovers the owner');
+      if (a.override) { if (!isOwner(conn, me)) fail('not_allowed', 'only the owner may issue without the phrase'); if (!a.reason) fail('bad_args', 'an override needs a reason'); }
+      else {
+        if (!t.recoveryHash) fail('not_found', 'they have not set a recovery phrase');
+        const now = Date.now(), tries = (attempts.get(t.id) || []).filter(x => now - x < 3600e3); attempts.set(t.id, tries);
+        if (tries.length >= 5) fail('locked', 'too many wrong phrases for this account', { until: tries[0] + 3600e3 });
+        const ok = crypto.timingSafeEqual(Buffer.from(phraseHash(a.phrase, t.recoverySalt), 'hex'), Buffer.from(t.recoveryHash, 'hex'));
+        if (!ok) { tries.push(now); modAct(conn, me, t, 'recovery_failed', 'wrong phrase (' + tries.length + ' of 5 this hour)', null, true); fail('auth_failed', 'the phrase does not match', { triesLeft: 5 - tries.length }); }
+        attempts.delete(t.id);
+      }
+      const code = S.recoveryCodeAdd(t.id); modAct(conn, me, t, 'recovery_issued', a.override ? 'override: ' + a.reason : 'phrase matched', code.expiresAt, true);
+      return code;
+    },
+    'moderation.list'(a) { return { entries: S.modlog(a.memberId || null, a.limit || 50) }; },
+    'report.create'(a, conn, me) {
+      if (!me) fail('not_allowed', 'the CLI is not a member'); if (!a.memberId && !a.messageId) fail('bad_args', 'report a member or a message');
+      let msg = null; if (a.messageId) { msg = S.message(a.messageId) || fail('not_found', 'no such message'); need(conn, me, 'channel.view', S.channel(msg.channelId)); }
+      if (a.memberId) memberOr404(a.memberId);
+      const r = S.reportAdd({ by: me.id, memberId: a.memberId || (msg && msg.authorId), messageId: a.messageId, channelId: msg && msg.channelId, reason: a.reason });
+      emitWhere('report.new', { report: Object.assign({}, r, { message: msg }) }, (c, m) => can(c, m, 'report.handle')); return { report: r };
+    },
+    'report.list'(a) { return { reports: S.reports(a.status || 'open', a.limit || 50).map(r => Object.assign(r, { message: r.messageId ? S.message(r.messageId) : null })) }; },
+    'report.resolve'(a, conn, me) {
+      const r = S.report(a.reportId) || fail('not_found', 'no such report'); const n = S.reportResolve(r.id, conn.cli ? 'cli' : me.id, a.note); audit(conn, me, 'report.resolve', r.id, { note: a.note || '' });
+      emitWhere('report.resolved', { report: n }, (c, m) => m.id === r.by || can(c, m, 'report.handle')); return { report: n };
+    },
     'member.set_role'(a, conn, me) {
       const t = memberOr404(a.memberId); outrank(conn, me, t);
       const role = S.role(a.roleId) || fail('not_found', 'no such role'); if (role.id === 'owner') fail('not_allowed', 'ownership moves only with group.transfer_owner');
@@ -319,6 +397,8 @@ function createCore(opts) {
           if (!conn.memberId && conn.bearer) conn.memberId = S.sessionGet(conn.bearer), conn.token = conn.bearer;
           if (!conn.memberId) fail('not_signed_in', 'sign in first');
           me = S.member(conn.memberId); if (!me || me.removed) { conn.memberId = null; fail('removed', 'this key was removed from the group'); }
+          if (activeUntil(me.bannedUntil)) { conn.memberId = null; conns.delete(conn); fail('banned', 'this key is banned', { until: me.bannedUntil, reason: me.banReason }); }
+          if (activeUntil(me.timeoutUntil) && TIMED_OUT_BLOCKS.has(cmd)) fail('timed_out', 'you are timed out', { until: me.timeoutUntil, reason: me.timeoutReason });
         }
         if (perm === 'owner' && !isOwner(conn, me)) fail('not_allowed', 'only the owner');
       }

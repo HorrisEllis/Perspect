@@ -278,6 +278,94 @@ await t('the CLI acts as the owner through the same core: status, invite, roles,
   assert.equal(run('call', 'nope'), 1);
 });
 
+console.log('\nADMINISTRATION');
+let rafe, jun; const rafeId = identity(), junId = identity();
+await t('setup: two more members', async () => {
+  const { invite } = await owner.call('invite.create', { uses: 2 });
+  rafe = await join({ identity: rafeId, invite: invite.code, name: 'Rafe' }); jun = await join({ identity: junId, invite: invite.code, name: 'Jun' });
+  await owner.call('member.set_role', { memberId: maya.me.id, roleId: 'admin' });
+});
+await t('a warning is logged and the member is told; a member cannot warn', async () => {
+  const seen = events(rafe); const { entry } = await maya.call('member.warn', { memberId: rafe.me.id, reason: 'keep it kind' }); await sleep(30);
+  assert.equal(entry.kind, 'warn'); assert.ok(seen.some(([e, d]) => e === 'moderation' && d.entry.reason === 'keep it kind'));
+  assert.equal(await err(jun.call('member.warn', { memberId: rafe.me.id, reason: 'x' })), 'not_allowed');
+  assert.equal((await maya.call('member.get', { memberId: rafe.me.id })).member.warnings, 1);
+});
+await t('a timeout: they can read but not post, react, type or join voice; 0 lifts it', async () => {
+  await maya.call('member.timeout', { memberId: rafe.me.id, minutes: 10, reason: 'cool off' });
+  const e = await rafe.call('message.send', { channelId: chText.id, body: 'x' }).catch(x => x); assert.equal(e.code, 'timed_out'); assert.ok(e.data.until > Date.now());
+  assert.equal(await err(rafe.call('voice.join', { channelId: chVoice.id })), 'timed_out');
+  assert.ok((await rafe.call('message.history', { channelId: chText.id })).messages.length, 'reading still works');
+  await maya.call('member.timeout', { memberId: rafe.me.id, minutes: 0 });
+  assert.ok((await rafe.call('message.send', { channelId: chText.id, body: 'back' })).message);
+});
+await t('ranks hold for moderation too: an admin cannot ban the owner or another admin', async () => {
+  assert.equal(await err(maya.call('member.ban', { memberId: owner.me.id, reason: 'x' })), 'not_allowed');
+  await owner.call('member.set_role', { memberId: jun.me.id, roleId: 'admin' });
+  assert.equal(await err(maya.call('member.timeout', { memberId: jun.me.id, minutes: 5 })), 'not_allowed');
+  await owner.call('member.set_role', { memberId: jun.me.id, roleId: 'member' });
+});
+await t('a temporary ban closes them out and refuses their key until it ends; unban lets them back', async () => {
+  const seen = events(rafe); await maya.call('member.ban', { memberId: rafe.me.id, hours: 24, reason: 'spam' }); await sleep(50);
+  assert.ok(seen.some(([e, d]) => e === 'removed' && d.banned));
+  const e = await join({ identity: rafeId }).catch(x => x); assert.equal(e.code, 'banned'); assert.equal(e.data.reason, 'spam');
+  assert.ok((await maya.call('ban.list')).bans.some(b => b.id === rafe.me.id));
+  await maya.call('member.unban', { memberId: rafe.me.id }); rafe = await join({ identity: rafeId }); assert.equal(rafe.me.name, 'Rafe');
+});
+await t('a permanent ban (no hours)', async () => {
+  const { entry } = await maya.call('member.ban', { memberId: rafe.me.id, reason: 'threats' }); assert.ok(entry.until > Date.now() + 1e12);
+  assert.equal(await err(join({ identity: rafeId })), 'banned'); await maya.call('member.unban', { memberId: rafe.me.id }); rafe = await join({ identity: rafeId });
+});
+await t('reset: the profile is cleared and every device signed out', async () => {
+  await rafe.call('member.update_me', { name: 'R4fe!!', about: 'spam spam', color: '#ff0000' });
+  const seen = events(rafe); const r = await maya.call('member.reset', { memberId: rafe.me.id, what: ['profile', 'sessions'], reason: 'offensive name' }); await sleep(50);
+  assert.equal(r.member.name, 'Member'); assert.equal(r.member.about, ''); assert.ok(seen.some(([e]) => e === 'removed'));
+  rafe = await join({ identity: rafeId }); assert.equal(rafe.me.name, 'Member', 'they sign in again with their own key');
+});
+await t('email: a member sets theirs; only admins see it; an admin can change it; the owner\'s only by the owner', async () => {
+  await jun.call('member.update_me', { email: 'jun@example.com' });
+  assert.equal((await rafe.call('group.get')).members.find(m => m.id === jun.me.id).email, undefined, 'members do not see emails');
+  assert.equal((await maya.call('member.get', { memberId: jun.me.id })).member.email, 'jun@example.com');
+  assert.equal((await maya.call('member.set_email', { memberId: jun.me.id, email: 'jun@new.example' })).member.email, 'jun@new.example');
+  assert.equal(await err(maya.call('member.set_email', { memberId: owner.me.id, email: 'x@y.zz' })), 'not_allowed');
+  assert.equal(await err(jun.call('member.update_me', { email: 'not an email' })), 'bad_args');
+});
+await t('recovery: the phrase is checked, wrong ones are counted, the code moves the account to a new device', async () => {
+  await jun.call('member.set_recovery_phrase', { phrase: 'Purple  sand plotter at midnight' });
+  assert.equal((await maya.call('member.get', { memberId: jun.me.id })).member.hasRecoveryPhrase, true);
+  const bad = await maya.call('recovery.issue', { memberId: jun.me.id, phrase: 'red sand plotter at noon' }).catch(x => x); assert.equal(bad.code, 'auth_failed'); assert.equal(bad.data.triesLeft, 4);
+  const { code } = await maya.call('recovery.issue', { memberId: jun.me.id, phrase: 'purple sand plotter at MIDNIGHT' });   // spacing and case do not matter
+  const { message } = await jun.call('message.send', { channelId: chText.id, body: 'before the phone died' });
+  const newDevice = identity(), seenOld = events(jun);
+  const back = await join({ identity: newDevice, invite: code }); await sleep(50);
+  assert.equal(back.me.id, jun.me.id, 'the same account'); assert.ok(seenOld.some(([e]) => e === 'removed'), 'the old device is signed out');
+  assert.equal(await err(join({ identity: junId })), 'invite_invalid', 'the old key no longer works');
+  assert.ok((await back.call('message.history', { channelId: chText.id })).messages.some(m => m.id === message.id && m.authorId === jun.me.id), 'history stays theirs');
+  assert.equal(await err(join({ identity: identity(), invite: code })), 'invite_invalid', 'the code is spent');
+  jun = back;
+});
+await t('recovery: 5 wrong phrases lock it; only the owner may override, with a reason', async () => {
+  await rafe.call('member.set_recovery_phrase', { phrase: 'a long enough phrase here' });
+  for (let i = 0; i < 5; i++) await maya.call('recovery.issue', { memberId: rafe.me.id, phrase: 'wrong wrong wrong ' + i }).catch(() => {});
+  assert.equal(await err(maya.call('recovery.issue', { memberId: rafe.me.id, phrase: 'a long enough phrase here' })), 'locked');
+  assert.equal(await err(maya.call('recovery.issue', { memberId: rafe.me.id, override: true, reason: 'x' })), 'not_allowed');
+  assert.equal(await err(owner.call('recovery.issue', { memberId: rafe.me.id, override: true })), 'bad_args');
+  assert.ok((await owner.call('recovery.issue', { memberId: rafe.me.id, override: true, reason: 'verified in person at the meetup' })).code);
+  const kinds = (await owner.call('moderation.list', { memberId: rafe.me.id })).entries.map(e => e.kind);
+  assert.ok(kinds.includes('recovery_failed') && kinds.includes('recovery_issued'));
+});
+await t('reports reach whoever handles them, with the message; the reporter hears it was resolved', async () => {
+  const { message } = await jun.call('message.send', { channelId: chText.id, body: 'something unkind' });
+  const seenAdmin = events(maya), seenMember = events(rafe);
+  const { report } = await rafe.call('report.create', { messageId: message.id, reason: 'felt dismissive' }); await sleep(30);
+  assert.ok(seenAdmin.some(([e, d]) => e === 'report.new' && d.report.message.id === message.id));
+  assert.ok(!seenMember.some(([e]) => e === 'report.new'), 'an ordinary member is not told about reports');
+  assert.equal(await err(rafe.call('report.list', {})), 'not_allowed');
+  assert.equal((await maya.call('report.list', {})).reports[0].memberId, jun.me.id);
+  await maya.call('report.resolve', { reportId: report.id, note: 'talked with them' }); await sleep(30);
+  assert.ok(seenMember.some(([e, d]) => e === 'report.resolved' && d.report.note === 'talked with them'));
+});
+
 await t('the real rate limit: the 21st command in a second is refused', async () => {
   const c2 = createCore({ dbPath: path.join(dir, 'limit.db') }), conn = { send() {}, memberId: null }; let last;
   for (let i = 0; i < 21; i++) last = c2.call(conn, 'auth.logout', {});

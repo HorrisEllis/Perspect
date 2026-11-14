@@ -28,7 +28,11 @@
     "role.manage": "create, change and delete roles ranked below you",
     "group.manage": "change the group's name and about",
     "audit.view": "read the audit log",
-    "emoji.manage": "add and remove the group's own emoji"
+    "emoji.manage": "add and remove the group's own emoji",
+    "member.moderate": "warn and time out members ranked below you",
+    "member.ban": "ban members ranked below you, for a while or for good, and lift bans",
+    "member.recover": "check a member's recovery phrase and give them a code to take their account to a new device; change a member's email; reset a member",
+    "report.handle": "see reports, be told of new ones, resolve them"
   },
   "roles": {
     "about": "A member has one role. A role has a rank and a set of permissions. You can only act on members and roles ranked below your own, and only grant permissions you hold. The owner (rank 1000) holds every permission and is the only one who can hand ownership on. A channel can add (allow) or take away (deny) channel-scoped permissions for a role.",
@@ -50,7 +54,11 @@
           "role.manage",
           "group.manage",
           "audit.view",
-          "emoji.manage"
+          "emoji.manage",
+          "member.moderate",
+          "member.ban",
+          "member.recover",
+          "report.handle"
         ]
       },
       "moderator": {
@@ -62,7 +70,9 @@
           "voice.join",
           "invite.create",
           "audit.view",
-          "emoji.manage"
+          "emoji.manage",
+          "member.moderate",
+          "report.handle"
         ]
       },
       "member": {
@@ -85,7 +95,9 @@
       "status": "here | away | offline",
       "joinedAt": "ms",
       "mood": "{ emoji, note } | null",
-      "where": "channelId | null"
+      "where": "channelId | null",
+      "about": "string",
+      "color": "#rrggbb | null"
     },
     "role": {
       "id": "id",
@@ -160,6 +172,38 @@
       "to": "id",
       "note": "string",
       "at": "ms"
+    },
+    "member_admin": {
+      "…member": "",
+      "email": "string | null",
+      "timeoutUntil": "ms | null",
+      "bannedUntil": "ms | null (a very large number = for good)",
+      "banReason": "string | null",
+      "warnings": "int",
+      "hasRecoveryPhrase": "bool",
+      "devices": "int (1: one key)"
+    },
+    "modlog": {
+      "id": "id",
+      "memberId": "id",
+      "kind": "warn | timeout | untimeout | ban | unban | reset | email | recovery_issued | recovery_failed | recovered",
+      "by": "id | cli",
+      "reason": "string",
+      "until": "ms | null",
+      "at": "ms"
+    },
+    "report": {
+      "id": "id",
+      "by": "id",
+      "memberId": "id | null",
+      "messageId": "id | null",
+      "channelId": "id | null",
+      "reason": "string",
+      "status": "open | resolved",
+      "resolvedBy": "id | null",
+      "note": "string",
+      "at": "ms",
+      "message": "message | null (to those who handle reports)"
     }
   },
   "commands": {
@@ -338,6 +382,19 @@
         "note": {
           "type": "string",
           "max": 80
+        },
+        "about": {
+          "type": "string",
+          "max": 500
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "email": {
+          "type": "string",
+          "max": 120,
+          "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
         }
       },
       "result": {
@@ -345,7 +402,8 @@
       },
       "emits": [
         "member.updated"
-      ]
+      ],
+      "about": "Your name, line, about, colour and (optional) email. Your email is seen only by you and those with member.recover."
     },
     "member.set_role": {
       "perm": "member.manage",
@@ -1202,6 +1260,302 @@
         "deck": "string",
         "prompt": "string"
       }
+    },
+    "member.set_recovery_phrase": {
+      "perm": "member",
+      "about": "A phrase only you know. Tell it to an admin if you lose your device: they type it, and if it matches they can give you a code to take your account to a new device. Kept as a slow salted hash; never shown.",
+      "args": {
+        "phrase": {
+          "type": "string",
+          "required": true,
+          "min": 12,
+          "max": 200
+        }
+      },
+      "result": {}
+    },
+    "member.get": {
+      "perm": "member.recover",
+      "about": "Everything about one member an admin needs, email included.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "member": "member_admin",
+        "modlog": "[modlog], newest first"
+      }
+    },
+    "member.warn": {
+      "perm": "member.moderate",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "reason": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 500
+        }
+      },
+      "result": {
+        "entry": "modlog"
+      },
+      "emits": [
+        "moderation"
+      ]
+    },
+    "member.timeout": {
+      "perm": "member.moderate",
+      "about": "They can read, but not post, react, type, spar, join voice, appreciate or nudge until then. minutes 0 lifts it.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "minutes": {
+          "type": "int",
+          "required": true,
+          "min": 0,
+          "max": 40320
+        },
+        "reason": {
+          "type": "string",
+          "max": 500
+        }
+      },
+      "result": {
+        "entry": "modlog"
+      },
+      "emits": [
+        "moderation",
+        "member.updated"
+      ]
+    },
+    "member.ban": {
+      "perm": "member.ban",
+      "about": "No hours = for good. Their connections close and their key is refused until it ends.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "hours": {
+          "type": "int",
+          "min": 1,
+          "max": 87600
+        },
+        "reason": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 500
+        }
+      },
+      "result": {
+        "entry": "modlog"
+      },
+      "emits": [
+        "moderation",
+        "member.left"
+      ]
+    },
+    "member.unban": {
+      "perm": "member.ban",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "reason": {
+          "type": "string",
+          "max": 500
+        }
+      },
+      "result": {
+        "entry": "modlog"
+      },
+      "emits": [
+        "moderation"
+      ]
+    },
+    "ban.list": {
+      "perm": "member.ban",
+      "args": {},
+      "result": {
+        "bans": "[member_admin] still banned"
+      }
+    },
+    "member.reset": {
+      "perm": "member.recover",
+      "about": "profile: their name becomes 'Member' and their line, about, colour and mood are cleared · sessions: every device is signed out (they sign in again with their key).",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "what": {
+          "type": "array",
+          "required": true,
+          "max": 2,
+          "of": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "sessions"
+            ]
+          }
+        },
+        "reason": {
+          "type": "string",
+          "max": 500
+        }
+      },
+      "result": {
+        "member": "member_admin"
+      },
+      "emits": [
+        "member.updated"
+      ]
+    },
+    "member.set_email": {
+      "perm": "member.recover",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "email": {
+          "type": "string",
+          "max": 120,
+          "pattern": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        }
+      },
+      "result": {
+        "member": "member_admin"
+      }
+    },
+    "recovery.issue": {
+      "perm": "member.recover",
+      "about": "Type the phrase they tell you. If it matches, a one-time code (24 hours) takes their account to a new device: they join with it as an invite, the new key replaces the old, and everything stays theirs. 5 wrong phrases lock it for an hour. The owner may issue without a phrase (override, with a reason).",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "phrase": {
+          "type": "string",
+          "max": 200
+        },
+        "override": {
+          "type": "bool"
+        },
+        "reason": {
+          "type": "string",
+          "max": 500
+        }
+      },
+      "result": {
+        "code": "string",
+        "expiresAt": "ms"
+      },
+      "emits": []
+    },
+    "moderation.list": {
+      "perm": "member.moderate",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "max": 64
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 200
+        }
+      },
+      "result": {
+        "entries": "[modlog], newest first"
+      }
+    },
+    "report.create": {
+      "perm": "member",
+      "about": "Report a person or a message. Everyone who handles reports is told at once.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "max": 64
+        },
+        "messageId": {
+          "type": "string",
+          "max": 64
+        },
+        "reason": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 1000
+        }
+      },
+      "result": {
+        "report": "report"
+      },
+      "emits": [
+        "report.new"
+      ]
+    },
+    "report.list": {
+      "perm": "report.handle",
+      "args": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "resolved",
+            "all"
+          ]
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 200
+        }
+      },
+      "result": {
+        "reports": "[report], newest first"
+      }
+    },
+    "report.resolve": {
+      "perm": "report.handle",
+      "args": {
+        "reportId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "note": {
+          "type": "string",
+          "max": 1000
+        }
+      },
+      "result": {
+        "report": "report"
+      },
+      "emits": [
+        "report.resolved"
+      ]
     }
   },
   "events": {
@@ -1338,6 +1692,24 @@
       "data": {
         "from": "id"
       }
+    },
+    "moderation": {
+      "to": "the member it is about, and those with member.moderate",
+      "data": {
+        "entry": "modlog"
+      }
+    },
+    "report.new": {
+      "to": "those with report.handle",
+      "data": {
+        "report": "report"
+      }
+    },
+    "report.resolved": {
+      "to": "those with report.handle, and the reporter",
+      "data": {
+        "report": "report"
+      }
     }
   },
   "errors": {
@@ -1354,6 +1726,9 @@
     "rate_limited": "too many commands; slow down",
     "wrong_kind": "the channel's kind does not allow this",
     "wait_first": "a one-way message takes no replies yet (data: repliesOpenAt)",
-    "not_your_turn": "it is not your turn, or the spar is not active"
+    "not_your_turn": "it is not your turn, or the spar is not active",
+    "timed_out": "you are timed out (data: until, reason)",
+    "banned": "this key is banned (data: until, reason)",
+    "locked": "too many wrong phrases; try again later (data: until)"
   }
 }

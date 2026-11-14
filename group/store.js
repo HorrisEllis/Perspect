@@ -8,8 +8,8 @@ const crypto = require('crypto');
 
 const BUILTIN_ROLES = [
   { id: 'owner', name: 'Owner', rank: 1000, perms: ['*'] },
-  { id: 'admin', name: 'Admin', rank: 800, perms: ['channel.view', 'message.send', 'message.manage', 'voice.join', 'invite.create', 'member.manage', 'channel.manage', 'role.manage', 'group.manage', 'audit.view', 'emoji.manage'] },
-  { id: 'moderator', name: 'Moderator', rank: 500, perms: ['channel.view', 'message.send', 'message.manage', 'voice.join', 'invite.create', 'audit.view', 'emoji.manage'] },
+  { id: 'admin', name: 'Admin', rank: 800, perms: ['channel.view', 'message.send', 'message.manage', 'voice.join', 'invite.create', 'member.manage', 'channel.manage', 'role.manage', 'group.manage', 'audit.view', 'emoji.manage', 'member.moderate', 'member.ban', 'member.recover', 'report.handle'] },
+  { id: 'moderator', name: 'Moderator', rank: 500, perms: ['channel.view', 'message.send', 'message.manage', 'voice.join', 'invite.create', 'audit.view', 'emoji.manage', 'member.moderate', 'report.handle'] },
   { id: 'member', name: 'Member', rank: 100, perms: ['channel.view', 'message.send', 'voice.join'] },
 ];
 const DEFAULT_CHANNELS = [
@@ -37,8 +37,16 @@ function open(dbPath) {
     CREATE TABLE IF NOT EXISTS reactions (messageId TEXT NOT NULL, emoji TEXT NOT NULL, memberId TEXT NOT NULL, PRIMARY KEY (messageId, emoji, memberId));
     CREATE TABLE IF NOT EXISTS invites (code TEXT PRIMARY KEY, usesLeft INTEGER NOT NULL, expiresAt INTEGER NOT NULL, roleId TEXT NOT NULL, createdBy TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (tokenHash TEXT PRIMARY KEY, memberId TEXT NOT NULL, expiresAt INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS modlog (id TEXT PRIMARY KEY, memberId TEXT NOT NULL, kind TEXT NOT NULL, byId TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', until INTEGER, at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS modlog_member ON modlog(memberId, at);
+    CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, byId TEXT NOT NULL, memberId TEXT, messageId TEXT, channelId TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, resolvedBy TEXT, note TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS recovery_codes (codeHash TEXT PRIMARY KEY, memberId TEXT NOT NULL, expiresAt INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, actorId TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '{}');`);
   const q = (sql) => db.prepare(sql);
+  // members gained fields over time; an older database is brought up to date in place
+  const cols = new Set(db.prepare('PRAGMA table_info(members)').all().map(c => c.name));
+  for (const [c, t] of [['email', 'TEXT'], ['about', "TEXT NOT NULL DEFAULT ''"], ['color', 'TEXT'], ['timeoutUntil', 'INTEGER'], ['timeoutReason', 'TEXT'], ['bannedUntil', 'INTEGER'], ['banReason', 'TEXT'], ['recoveryHash', 'TEXT'], ['recoverySalt', 'TEXT']])
+    if (!cols.has(c)) db.exec(`ALTER TABLE members ADD COLUMN ${c} ${t}`);
   // builtin roles keep their current permissions on every open
   for (const r of BUILTIN_ROLES) q('UPDATE roles SET perms=? WHERE id=? AND builtin=1').run(JSON.stringify(r.perms), r.id);
   const meta = (k, v) => { if (v === undefined) { const r = q('SELECT v FROM meta WHERE k=?').get(k); return r ? r.v : null; } q('INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').run(k, v === null ? null : String(v)); };
@@ -49,7 +57,8 @@ function open(dbPath) {
     DEFAULT_CHANNELS.forEach(([n, k, c, t], i) => q('INSERT INTO channels(id,name,kind,category,topic,position) VALUES(?,?,?,?,?,?)').run(newId('ch'), n, k, c, t, i));
   }
   const role = (r) => r && { id: r.id, name: r.name, rank: r.rank, permissions: JSON.parse(r.perms), builtin: !!r.builtin };
-  const member = (m) => m && { id: m.id, pub: m.pub, name: m.name, note: m.note, roleId: m.roleId, joinedAt: m.joinedAt, removed: !!m.removed };
+  const member = (m) => m && { id: m.id, pub: m.pub, name: m.name, note: m.note, about: m.about || '', color: m.color || null, email: m.email || null, roleId: m.roleId, joinedAt: m.joinedAt, removed: !!m.removed,
+    timeoutUntil: m.timeoutUntil || null, timeoutReason: m.timeoutReason || null, bannedUntil: m.bannedUntil || null, banReason: m.banReason || null, recoveryHash: m.recoveryHash || null, recoverySalt: m.recoverySalt || null };
   const channel = (c) => c && { id: c.id, name: c.name, kind: c.kind, category: c.category, topic: c.topic, position: c.position, overrides: JSON.parse(c.overrides) };
   const reactionsOf = (messageId) => { const out = {}; q('SELECT emoji, memberId FROM reactions WHERE messageId=? ORDER BY rowid').all(messageId).forEach(r => (out[r.emoji] = out[r.emoji] || []).push(r.memberId)); return out; };
   const message = (m) => m && { id: m.id, seq: m.seq, channelId: m.channelId, authorId: m.authorId, kind: m.kind, body: m.body, replyTo: m.replyTo || null, buildsOn: m.buildsOn || null, forkOf: m.forkOf || null, repliesOpenAt: m.repliesOpenAt || null, createdAt: m.createdAt, editedAt: m.editedAt || null, reactions: reactionsOf(m.id) };
@@ -67,7 +76,20 @@ function open(dbPath) {
     member: (id) => member(q('SELECT * FROM members WHERE id=?').get(id)),
     memberByPub: (pub) => member(q('SELECT * FROM members WHERE pub=?').get(pub)),
     memberCreate: (pub, name, roleId) => { const id = newId('m'); q('INSERT INTO members(id,pub,name,roleId,joinedAt) VALUES(?,?,?,?,?)').run(id, pub, name, roleId, Date.now()); return S.member(id); },
-    memberUpdate: (id, f) => { const m = S.member(id); q('UPDATE members SET name=?, note=?, roleId=? WHERE id=?').run(f.name ?? m.name, f.note ?? m.note, f.roleId ?? m.roleId, id); return S.member(id); },
+    memberUpdate: (id, f) => { const m = S.member(id); q('UPDATE members SET name=?, note=?, roleId=?, about=?, color=?, email=? WHERE id=?').run(f.name ?? m.name, f.note ?? m.note, f.roleId ?? m.roleId, f.about ?? m.about, f.color === undefined ? m.color : f.color, f.email === undefined ? m.email : f.email, id); return S.member(id); },
+    memberSet: (id, field, v) => { if (!['timeoutUntil', 'timeoutReason', 'bannedUntil', 'banReason', 'recoveryHash', 'recoverySalt', 'pub', 'removed'].includes(field)) throw new Error('not a settable field: ' + field); q(`UPDATE members SET ${field}=? WHERE id=?`).run(v, id); return S.member(id); },
+    sessionsEnd: (memberId) => q('DELETE FROM sessions WHERE memberId=?').run(memberId),
+    banned: () => q('SELECT * FROM members WHERE bannedUntil>? ORDER BY bannedUntil').all(Date.now()).map(member),
+    modlogAdd: (memberId, kind, byId, reason, until) => { const e = { id: newId('mod'), memberId, kind, by: byId, reason: reason || '', until: until || null, at: Date.now() }; q('INSERT INTO modlog(id,memberId,kind,byId,reason,until,at) VALUES(?,?,?,?,?,?,?)').run(e.id, memberId, kind, byId, e.reason, e.until, e.at); return e; },
+    modlog: (memberId, limit) => (memberId ? q('SELECT * FROM modlog WHERE memberId=? ORDER BY at DESC, rowid DESC LIMIT ?').all(memberId, limit) : q('SELECT * FROM modlog ORDER BY at DESC, rowid DESC LIMIT ?').all(limit)).map(r => ({ id: r.id, memberId: r.memberId, kind: r.kind, by: r.byId, reason: r.reason, until: r.until || null, at: r.at })),
+    warnings: (memberId) => q("SELECT COUNT(*) n FROM modlog WHERE memberId=? AND kind='warn'").get(memberId).n,
+    reportAdd: (r) => { const x = Object.assign({ id: newId('rep'), status: 'open', resolvedBy: null, note: '', at: Date.now() }, r); q('INSERT INTO reports(id,byId,memberId,messageId,channelId,reason,status,resolvedBy,note,at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(x.id, x.by, x.memberId || null, x.messageId || null, x.channelId || null, x.reason, x.status, null, '', x.at); return S.report(x.id); },
+    report: (id) => { const r = q('SELECT * FROM reports WHERE id=?').get(id); return r && { id: r.id, by: r.byId, memberId: r.memberId || null, messageId: r.messageId || null, channelId: r.channelId || null, reason: r.reason, status: r.status, resolvedBy: r.resolvedBy || null, note: r.note, at: r.at }; },
+    reports: (status, limit) => (status === 'all' ? q('SELECT id FROM reports ORDER BY at DESC LIMIT ?').all(limit) : q('SELECT id FROM reports WHERE status=? ORDER BY at DESC LIMIT ?').all(status, limit)).map(r => S.report(r.id)),
+    reportResolve: (id, by, note) => { q("UPDATE reports SET status='resolved', resolvedBy=?, note=? WHERE id=?").run(by, note || '', id); return S.report(id); },
+    recoveryCodeAdd: (memberId) => { const code = 'r-' + crypto.randomBytes(12).toString('base64url'); q('DELETE FROM recovery_codes WHERE memberId=?').run(memberId); q('INSERT INTO recovery_codes(codeHash,memberId,expiresAt) VALUES(?,?,?)').run(sha(code), memberId, Date.now() + 24 * 3600e3); return { code, expiresAt: Date.now() + 24 * 3600e3 }; },
+    recoveryCodeGet: (code) => { const r = code && q('SELECT * FROM recovery_codes WHERE codeHash=? AND expiresAt>?').get(sha(code), Date.now()); return r ? r.memberId : null; },
+    recoveryCodeSpend: (code) => q('DELETE FROM recovery_codes WHERE codeHash=?').run(sha(code)),
     memberRemove: (id) => { q('UPDATE members SET removed=1 WHERE id=?').run(id); q('DELETE FROM sessions WHERE memberId=?').run(id); },
     // channels
     channels: () => q('SELECT * FROM channels ORDER BY position, name').all().map(channel),
