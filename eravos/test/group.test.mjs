@@ -70,6 +70,11 @@ await t('arguments are checked against the contract: unknown, missing, wrong typ
   assert.equal(C.check('message.send', { channelId: 'x', body: 'hi' }).ok, true);
 });
 
+await t('every page carries the current contract pin (a page with a stale pin would be refused)', () => {
+  const dir = ROOT + '/group/web', pages = fs.readdirSync(dir).filter(f => f.endsWith('.html')); assert.ok(pages.length, 'there are pages');
+  for (const f of pages) { const m = /<meta name="perspect-contract" content="([^"]+)">/.exec(fs.readFileSync(dir + '/' + f, 'utf8')); assert.ok(m, f + ' has no pin'); assert.equal(m[1], C.VERSION + ' ' + C.HASH, f + ' pins an old contract'); }
+});
+
 console.log('\nTHE HANDSHAKE');
 const ownerId = identity(), setup = core.store.setupCode();
 let owner;

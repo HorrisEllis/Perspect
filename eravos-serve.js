@@ -629,6 +629,15 @@ function serveStatic(req, res) {
 
   // ── THE GROUP ── commands over HTTP (/api/group/*), and the client library pages load
   if (groupHttp && groupHttp(req, res)) return;
+  // the group's pages, one HTML each, and what they share (group/web); nothing outside that folder
+  if (/^\/group\/[a-z0-9-]+\.(html|css|js)$/.test(urlPath) && urlPath !== '/group/client.js') {
+    const f = path.join(__dirname, 'group', 'web', path.basename(urlPath));
+    if (fs.existsSync(f)) {
+      const type = { html: 'text/html', css: 'text/css', js: 'application/javascript' }[urlPath.split('.').pop()];
+      res.writeHead(200, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(fs.readFileSync(f));
+    }
+  }
   if (urlPath === '/group/client.js') {
     res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
     return res.end(fs.readFileSync(path.join(__dirname, 'group', 'client.js')));
