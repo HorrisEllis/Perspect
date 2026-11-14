@@ -199,10 +199,14 @@
     _attach(server) {
       server.on('upgrade', (req, socket, head) => {
         // Path filter (optional)
-        if (this._path && req.url !== this._path) {
-          socket.destroy();
+        // Several servers can share one listener, each on its own path: a request that is not ours is left for
+        // the others, and closed only if none of them claimed it (destroying it here broke every second path)
+        const reqPath = String(req.url || '').split('?')[0];
+        if (this._path && reqPath !== this._path) {
+          setImmediate(() => { if (!req._wsClaimed && !socket.destroyed) socket.destroy(); });
           return;
         }
+        req._wsClaimed = true;
 
         // Validate upgrade request
         const key = req.headers['sec-websocket-key'];

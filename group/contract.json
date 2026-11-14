@@ -1,0 +1,1359 @@
+{
+  "name": "perspect.group",
+  "version": "1.0.0",
+  "about": "The interaction contract between a Perspect group server and anything that talks to it: pages, the CLI, other programs. Pages float on it — they send these commands and receive these events, nothing else — so a page can be thrown away and rewritten without touching the server. One core runs every command (group/core.js) behind three doors that behave the same: WebSocket, HTTP and the CLI. The server checks every call against this file; test/group.test.mjs fails if the code and this file disagree. It is meant to hold everything a group makes together: conversation, sparring, ideas built piece by piece, presence and the small things that build closeness.",
+  "handshake": {
+    "about": "Both sides prove they speak this exact contract before anything else, and the member proves their key. 1) client → auth.hello { pub, contract: { version, hash } }: the server refuses a different hash with contract_mismatch (and says its own). 2) server → { contract, ephPub, nonce, envelope }: the client checks the server's hash is its own and refuses to go on if not. 3) client opens the envelope with its private key → auth.prove { proof }. 4) server → { me, group, token }. The token signs HTTP calls (Authorization: Bearer) until it expires.",
+    "hash": "sha256 of this file with its keys sorted (group/contract.js: hashOf)"
+  },
+  "transport": {
+    "ws": "ws(s)://<host>/group — request { id, cmd, args } → reply { id, ok, result } or { id, ok: false, error: { code, message, data? } }; events arrive as { event, data }",
+    "http": "POST /api/group/<cmd> with JSON args (Authorization: Bearer <token> once signed in) → the same reply without id. GET /api/group/contract → { contract, hash }. Events are WebSocket only.",
+    "cli": "node group/cli.js — runs on the server, as the owner of its database (see group/cli.js --help)",
+    "limits": {
+      "frameBytes": 65536,
+      "commandsPerSecond": 20,
+      "authSeconds": 10,
+      "tokenHours": 168
+    }
+  },
+  "permissions": {
+    "channel.view": "see a channel and read it (channel scoped)",
+    "message.send": "post and type in a channel (channel scoped)",
+    "message.manage": "delete anyone's message in a channel (channel scoped)",
+    "voice.join": "join a voice room (channel scoped)",
+    "invite.create": "make, list and revoke invites",
+    "member.manage": "change members' roles and remove members ranked below you",
+    "channel.manage": "create, change, delete channels and set their overrides",
+    "role.manage": "create, change and delete roles ranked below you",
+    "group.manage": "change the group's name and about",
+    "audit.view": "read the audit log",
+    "emoji.manage": "add and remove the group's own emoji"
+  },
+  "roles": {
+    "about": "A member has one role. A role has a rank and a set of permissions. You can only act on members and roles ranked below your own, and only grant permissions you hold. The owner (rank 1000) holds every permission and is the only one who can hand ownership on. A channel can add (allow) or take away (deny) channel-scoped permissions for a role.",
+    "builtin": {
+      "owner": {
+        "rank": 1000,
+        "permissions": "all"
+      },
+      "admin": {
+        "rank": 800,
+        "permissions": [
+          "channel.view",
+          "message.send",
+          "message.manage",
+          "voice.join",
+          "invite.create",
+          "member.manage",
+          "channel.manage",
+          "role.manage",
+          "group.manage",
+          "audit.view",
+          "emoji.manage"
+        ]
+      },
+      "moderator": {
+        "rank": 500,
+        "permissions": [
+          "channel.view",
+          "message.send",
+          "message.manage",
+          "voice.join",
+          "invite.create",
+          "audit.view",
+          "emoji.manage"
+        ]
+      },
+      "member": {
+        "rank": 100,
+        "permissions": [
+          "channel.view",
+          "message.send",
+          "voice.join"
+        ]
+      }
+    }
+  },
+  "types": {
+    "id": "a string the server made; never parse it",
+    "member": {
+      "id": "id",
+      "name": "string",
+      "note": "string",
+      "roleId": "id",
+      "status": "here | away | offline",
+      "joinedAt": "ms",
+      "mood": "{ emoji, note } | null",
+      "where": "channelId | null"
+    },
+    "role": {
+      "id": "id",
+      "name": "string",
+      "rank": "int",
+      "permissions": "[permission]",
+      "builtin": "bool"
+    },
+    "channel": {
+      "id": "id",
+      "name": "string",
+      "kind": "text | voice | spar | events",
+      "category": "string",
+      "topic": "string",
+      "position": "int",
+      "overrides": "{ roleId: { allow: [permission], deny: [permission] } }"
+    },
+    "message": {
+      "id": "id",
+      "seq": "int, rises within the group",
+      "channelId": "id",
+      "authorId": "id",
+      "kind": "msg | oneway | spar | idea | event | prompt",
+      "body": "string, kept exactly as sent (it may be ciphertext)",
+      "replyTo": "id | null",
+      "createdAt": "ms",
+      "editedAt": "ms | null",
+      "reactions": "{ emoji: [memberId] }",
+      "buildsOn": "id | null — a piece added to an idea",
+      "forkOf": "id | null — a new idea grown from another",
+      "repliesOpenAt": "ms | null — a one-way message takes no replies before this"
+    },
+    "group": {
+      "name": "string",
+      "about": "string",
+      "createdAt": "ms",
+      "ownerId": "id | null"
+    },
+    "audit": {
+      "seq": "int",
+      "at": "ms",
+      "actorId": "id | cli",
+      "action": "string (a command)",
+      "target": "string",
+      "detail": "object"
+    },
+    "spar": {
+      "id": "id",
+      "channelId": "id",
+      "topic": "string",
+      "by": "id",
+      "opponentId": "id | null (open to anyone)",
+      "status": "open | active | ended",
+      "turnSeconds": "int",
+      "turnsTotal": "int",
+      "speed": "bool",
+      "current": "id | null",
+      "turnEndsAt": "ms | null",
+      "turns": "[{ n, by, text, at, auto }]",
+      "rules": "[{ id, text, by, status: pending | accepted | declined, expiresAt }]",
+      "endedReason": "string | null"
+    },
+    "emoji": {
+      "name": "string",
+      "image": "data:image/png|gif|webp;base64,…",
+      "addedBy": "id",
+      "at": "ms"
+    },
+    "appreciation": {
+      "id": "id",
+      "from": "id",
+      "to": "id",
+      "note": "string",
+      "at": "ms"
+    }
+  },
+  "commands": {
+    "auth.hello": {
+      "perm": "anyone",
+      "about": "Start signing in. The first time, pass an invite code (the server's setup code makes you the owner).",
+      "args": {
+        "pub": {
+          "type": "string",
+          "required": true,
+          "min": 40,
+          "max": 64
+        },
+        "contract": {
+          "type": "object",
+          "required": true,
+          "fields": {
+            "version": {
+              "type": "string",
+              "required": true,
+              "max": 20
+            },
+            "hash": {
+              "type": "string",
+              "required": true,
+              "min": 64,
+              "max": 64
+            }
+          }
+        },
+        "invite": {
+          "type": "string",
+          "max": 64
+        },
+        "name": {
+          "type": "string",
+          "max": 40
+        }
+      },
+      "result": {
+        "contract": "{ version, hash }",
+        "challengeId": "string (send it back with auth.prove; HTTP needs it)",
+        "ephPub": "string",
+        "nonce": "string",
+        "envelope": "{ iv, ct }"
+      }
+    },
+    "auth.prove": {
+      "perm": "anyone",
+      "args": {
+        "proof": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "challengeId": {
+          "type": "string",
+          "max": 64
+        }
+      },
+      "result": {
+        "me": "member",
+        "group": "group",
+        "token": "string"
+      },
+      "emits": [
+        "member.joined",
+        "presence"
+      ]
+    },
+    "auth.logout": {
+      "perm": "member",
+      "about": "Ends this token.",
+      "args": {},
+      "result": {}
+    },
+    "group.get": {
+      "perm": "member",
+      "args": {},
+      "result": {
+        "group": "group",
+        "channels": "[channel you can view]",
+        "members": "[member]",
+        "roles": "[role]",
+        "me": "member",
+        "myPermissions": "[permission]",
+        "voice": "{ channelId: [memberId] }"
+      }
+    },
+    "group.update": {
+      "perm": "group.manage",
+      "args": {
+        "name": {
+          "type": "string",
+          "min": 1,
+          "max": 80
+        },
+        "about": {
+          "type": "string",
+          "max": 2000
+        }
+      },
+      "result": {
+        "group": "group"
+      },
+      "emits": [
+        "group.updated"
+      ]
+    },
+    "group.transfer_owner": {
+      "perm": "owner",
+      "about": "The new owner takes rank 1000; you become an admin.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "group": "group"
+      },
+      "emits": [
+        "member.updated",
+        "group.updated"
+      ]
+    },
+    "invite.create": {
+      "perm": "invite.create",
+      "args": {
+        "uses": {
+          "type": "int",
+          "min": 1,
+          "max": 500
+        },
+        "hours": {
+          "type": "int",
+          "min": 1,
+          "max": 720
+        },
+        "roleId": {
+          "type": "string",
+          "max": 64
+        }
+      },
+      "result": {
+        "invite": "{ code, usesLeft, expiresAt, roleId }"
+      }
+    },
+    "invite.list": {
+      "perm": "invite.create",
+      "args": {},
+      "result": {
+        "invites": "[{ code, usesLeft, expiresAt, roleId, createdBy }]"
+      }
+    },
+    "invite.revoke": {
+      "perm": "invite.create",
+      "args": {
+        "code": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {}
+    },
+    "member.update_me": {
+      "perm": "member",
+      "args": {
+        "name": {
+          "type": "string",
+          "min": 1,
+          "max": 40
+        },
+        "note": {
+          "type": "string",
+          "max": 80
+        }
+      },
+      "result": {
+        "me": "member"
+      },
+      "emits": [
+        "member.updated"
+      ]
+    },
+    "member.set_role": {
+      "perm": "member.manage",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "roleId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "member": "member"
+      },
+      "emits": [
+        "member.updated"
+      ]
+    },
+    "member.remove": {
+      "perm": "member.manage",
+      "about": "Their connections close and their key can no longer sign in.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "member.left"
+      ]
+    },
+    "role.list": {
+      "perm": "member",
+      "args": {},
+      "result": {
+        "roles": "[role]"
+      }
+    },
+    "role.create": {
+      "perm": "role.manage",
+      "args": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 30
+        },
+        "rank": {
+          "type": "int",
+          "required": true,
+          "min": 1,
+          "max": 999
+        },
+        "permissions": {
+          "type": "array",
+          "required": true,
+          "max": 20,
+          "of": {
+            "type": "string",
+            "enum": "permissions"
+          }
+        }
+      },
+      "result": {
+        "role": "role"
+      },
+      "emits": [
+        "role.changed"
+      ]
+    },
+    "role.update": {
+      "perm": "role.manage",
+      "args": {
+        "roleId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "name": {
+          "type": "string",
+          "min": 1,
+          "max": 30
+        },
+        "rank": {
+          "type": "int",
+          "min": 1,
+          "max": 999
+        },
+        "permissions": {
+          "type": "array",
+          "max": 20,
+          "of": {
+            "type": "string",
+            "enum": "permissions"
+          }
+        }
+      },
+      "result": {
+        "role": "role"
+      },
+      "emits": [
+        "role.changed"
+      ]
+    },
+    "role.delete": {
+      "perm": "role.manage",
+      "about": "Not a builtin role. Its members become members.",
+      "args": {
+        "roleId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "role.changed"
+      ]
+    },
+    "presence.set": {
+      "perm": "member",
+      "args": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "here",
+            "away"
+          ]
+        },
+        "mood": {
+          "type": "object",
+          "fields": {
+            "emoji": {
+              "type": "string",
+              "required": true,
+              "min": 1,
+              "max": 16
+            },
+            "note": {
+              "type": "string",
+              "max": 80
+            }
+          }
+        },
+        "clearMood": {
+          "type": "bool"
+        },
+        "where": {
+          "type": "string",
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "presence"
+      ],
+      "about": "Any of: here or away; a mood (an emoji and a short note) or clearMood; where you are (a channel id, or empty for nowhere)."
+    },
+    "channel.create": {
+      "perm": "channel.manage",
+      "args": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 40,
+          "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} _-]*$"
+        },
+        "kind": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "text",
+            "voice",
+            "spar",
+            "events"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "max": 30
+        },
+        "topic": {
+          "type": "string",
+          "max": 200
+        }
+      },
+      "result": {
+        "channel": "channel"
+      },
+      "emits": [
+        "channel.created"
+      ]
+    },
+    "channel.update": {
+      "perm": "channel.manage",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "name": {
+          "type": "string",
+          "min": 1,
+          "max": 40,
+          "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} _-]*$"
+        },
+        "category": {
+          "type": "string",
+          "max": 30
+        },
+        "topic": {
+          "type": "string",
+          "max": 200
+        },
+        "position": {
+          "type": "int",
+          "min": 0,
+          "max": 9999
+        }
+      },
+      "result": {
+        "channel": "channel"
+      },
+      "emits": [
+        "channel.updated"
+      ]
+    },
+    "channel.set_override": {
+      "perm": "channel.manage",
+      "about": "What a role may do in this channel beyond (allow) or short of (deny) its own permissions. Empty lists clear it.",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "roleId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "allow": {
+          "type": "array",
+          "max": 4,
+          "of": {
+            "type": "string",
+            "enum": [
+              "channel.view",
+              "message.send",
+              "message.manage",
+              "voice.join"
+            ]
+          }
+        },
+        "deny": {
+          "type": "array",
+          "max": 4,
+          "of": {
+            "type": "string",
+            "enum": [
+              "channel.view",
+              "message.send",
+              "message.manage",
+              "voice.join"
+            ]
+          }
+        }
+      },
+      "result": {
+        "channel": "channel"
+      },
+      "emits": [
+        "channel.updated"
+      ]
+    },
+    "channel.delete": {
+      "perm": "channel.manage",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "channel.deleted"
+      ]
+    },
+    "message.send": {
+      "perm": "message.send",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "msg",
+            "oneway",
+            "spar",
+            "idea",
+            "event",
+            "prompt"
+          ]
+        },
+        "body": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 8000
+        },
+        "replyTo": {
+          "type": "string",
+          "max": 64
+        },
+        "buildsOn": {
+          "type": "string",
+          "max": 64
+        },
+        "forkOf": {
+          "type": "string",
+          "max": 64
+        }
+      },
+      "result": {
+        "message": "message"
+      },
+      "emits": [
+        "message.new"
+      ],
+      "about": "buildsOn adds a piece to an idea (kind idea); forkOf grows a new idea from one. A reply to a one-way message waits until its repliesOpenAt (wait_first)."
+    },
+    "message.edit": {
+      "perm": "member",
+      "about": "Only your own messages.",
+      "args": {
+        "messageId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "body": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 8000
+        }
+      },
+      "result": {
+        "message": "message"
+      },
+      "emits": [
+        "message.edited"
+      ]
+    },
+    "message.delete": {
+      "perm": "member",
+      "about": "Your own messages; anyone's with message.manage in that channel.",
+      "args": {
+        "messageId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "message.deleted"
+      ]
+    },
+    "message.history": {
+      "perm": "channel.view",
+      "about": "The newest messages before a seq (or the latest), oldest first.",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "before": {
+          "type": "int",
+          "min": 0
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 200
+        }
+      },
+      "result": {
+        "messages": "[message]",
+        "more": "bool"
+      }
+    },
+    "message.since": {
+      "perm": "member",
+      "about": "Catch up after being away: everything after a seq in channels you can view, oldest first.",
+      "args": {
+        "after": {
+          "type": "int",
+          "required": true,
+          "min": 0
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 1000
+        }
+      },
+      "result": {
+        "messages": "[message]",
+        "more": "bool"
+      }
+    },
+    "reaction.toggle": {
+      "perm": "channel.view",
+      "args": {
+        "messageId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "emoji": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 16
+        }
+      },
+      "result": {
+        "messageId": "id",
+        "reactions": "{ emoji: [memberId] }"
+      },
+      "emits": [
+        "reaction"
+      ]
+    },
+    "typing": {
+      "perm": "message.send",
+      "about": "Ephemeral: passed on, never stored.",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "typing"
+      ]
+    },
+    "voice.join": {
+      "perm": "voice.join",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "channelId": "id",
+        "members": "[memberId] already in it"
+      },
+      "emits": [
+        "voice.state"
+      ]
+    },
+    "voice.leave": {
+      "perm": "member",
+      "args": {},
+      "result": {},
+      "emits": [
+        "voice.state"
+      ]
+    },
+    "voice.signal": {
+      "perm": "member",
+      "about": "Passes call setup (offer / answer / ICE) to one member in your voice room. Forwarded, never read.",
+      "args": {
+        "to": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "data": {
+          "type": "string",
+          "required": true,
+          "max": 32000
+        }
+      },
+      "result": {},
+      "emits": [
+        "voice.signal"
+      ]
+    },
+    "audit.list": {
+      "perm": "audit.view",
+      "args": {
+        "before": {
+          "type": "int",
+          "min": 0
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 200
+        }
+      },
+      "result": {
+        "entries": "[audit], newest first"
+      }
+    },
+    "idea.chain": {
+      "perm": "channel.view",
+      "about": "An idea with every piece built on it and every fork grown from it, each with its author.",
+      "args": {
+        "messageId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "idea": "message",
+        "pieces": "[message]",
+        "forks": "[message]"
+      }
+    },
+    "spar.challenge": {
+      "perm": "message.send",
+      "about": "In a spar channel. Name an opponent, or leave it open for anyone to accept.",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "topic": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 300
+        },
+        "opponentId": {
+          "type": "string",
+          "max": 64
+        },
+        "turnSeconds": {
+          "type": "int",
+          "min": 5,
+          "max": 300
+        },
+        "turns": {
+          "type": "int",
+          "min": 2,
+          "max": 40
+        },
+        "speed": {
+          "type": "bool"
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.accept": {
+      "perm": "member",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.decline": {
+      "perm": "member",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.turn": {
+      "perm": "member",
+      "about": "Only on your turn, before it runs out. When a turn runs out it is posted empty, and the other side goes.",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "text": {
+          "type": "string",
+          "max": 2000
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.keepalive": {
+      "perm": "member",
+      "about": "Speed mode: send while you type. Quiet for 5 seconds on your turn and the turn is lost.",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {}
+    },
+    "spar.rule_propose": {
+      "perm": "member",
+      "about": "A rule both must accept. The other side has 30 seconds; the same rule cannot be asked twice in a spar.",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "text": {
+          "type": "string",
+          "required": true,
+          "min": 1,
+          "max": 120
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.rule_answer": {
+      "perm": "member",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "ruleId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "accept": {
+          "type": "bool",
+          "required": true
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.end": {
+      "perm": "member",
+      "about": "Either side ends it; so can anyone with message.manage in the channel.",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "spar": "spar"
+      },
+      "emits": [
+        "spar.updated"
+      ]
+    },
+    "spar.get": {
+      "perm": "member",
+      "args": {
+        "sparId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "spar": "spar"
+      }
+    },
+    "spar.list": {
+      "perm": "channel.view",
+      "args": {
+        "channelId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {
+        "spars": "[spar], open and active first"
+      }
+    },
+    "emoji.list": {
+      "perm": "member",
+      "args": {},
+      "result": {
+        "emojis": "[emoji]"
+      }
+    },
+    "emoji.add": {
+      "perm": "emoji.manage",
+      "about": "A small image (PNG, GIF or WebP, up to 48 KB as base64). Used as :name: in messages and reactions.",
+      "args": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "min": 2,
+          "max": 32,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "image": {
+          "type": "string",
+          "required": true,
+          "max": 49152,
+          "pattern": "^data:image/(png|gif|webp);base64,[A-Za-z0-9+/=]+$"
+        }
+      },
+      "result": {
+        "emoji": "emoji"
+      },
+      "emits": [
+        "emoji.changed"
+      ]
+    },
+    "emoji.remove": {
+      "perm": "emoji.manage",
+      "args": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "max": 32
+        }
+      },
+      "result": {},
+      "emits": [
+        "emoji.changed"
+      ]
+    },
+    "appreciate": {
+      "perm": "member",
+      "about": "Thank or recognise someone; the group sees it.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        },
+        "note": {
+          "type": "string",
+          "max": 280
+        }
+      },
+      "result": {
+        "appreciation": "appreciation"
+      },
+      "emits": [
+        "appreciation"
+      ]
+    },
+    "appreciation.list": {
+      "perm": "member",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "max": 64
+        },
+        "limit": {
+          "type": "int",
+          "min": 1,
+          "max": 200
+        }
+      },
+      "result": {
+        "appreciations": "[appreciation], newest first"
+      }
+    },
+    "nudge": {
+      "perm": "member",
+      "about": "A gentle 'thinking of you'. Once a minute per person.",
+      "args": {
+        "memberId": {
+          "type": "string",
+          "required": true,
+          "max": 64
+        }
+      },
+      "result": {},
+      "emits": [
+        "nudge"
+      ]
+    },
+    "prompt.draw": {
+      "perm": "member",
+      "about": "A question to start something: connection, dreams, creativity, gratitude, spar.",
+      "args": {
+        "deck": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "connection",
+            "dreams",
+            "creativity",
+            "gratitude",
+            "spar"
+          ]
+        }
+      },
+      "result": {
+        "deck": "string",
+        "prompt": "string"
+      }
+    }
+  },
+  "events": {
+    "group.updated": {
+      "to": "members",
+      "data": {
+        "group": "group"
+      }
+    },
+    "member.joined": {
+      "to": "members",
+      "data": {
+        "member": "member"
+      }
+    },
+    "member.updated": {
+      "to": "members",
+      "data": {
+        "member": "member"
+      }
+    },
+    "member.left": {
+      "to": "members",
+      "data": {
+        "memberId": "id"
+      }
+    },
+    "role.changed": {
+      "to": "members",
+      "data": {
+        "roles": "[role]"
+      }
+    },
+    "presence": {
+      "to": "members",
+      "data": {
+        "memberId": "id",
+        "status": "here | away | offline",
+        "mood": "{ emoji, note } | null",
+        "where": "id | null"
+      }
+    },
+    "channel.created": {
+      "to": "members who can view it",
+      "data": {
+        "channel": "channel"
+      }
+    },
+    "channel.updated": {
+      "to": "members who can view it",
+      "data": {
+        "channel": "channel"
+      }
+    },
+    "channel.deleted": {
+      "to": "members",
+      "data": {
+        "channelId": "id"
+      }
+    },
+    "message.new": {
+      "to": "members who can view the channel",
+      "data": {
+        "message": "message"
+      }
+    },
+    "message.edited": {
+      "to": "members who can view the channel",
+      "data": {
+        "message": "message"
+      }
+    },
+    "message.deleted": {
+      "to": "members who can view the channel",
+      "data": {
+        "messageId": "id",
+        "channelId": "id"
+      }
+    },
+    "reaction": {
+      "to": "members who can view the channel",
+      "data": {
+        "messageId": "id",
+        "channelId": "id",
+        "reactions": "{ emoji: [memberId] }"
+      }
+    },
+    "typing": {
+      "to": "members who can view the channel, not the sender",
+      "data": {
+        "channelId": "id",
+        "memberId": "id"
+      }
+    },
+    "voice.state": {
+      "to": "members",
+      "data": {
+        "channelId": "id | null",
+        "memberId": "id",
+        "joined": "bool"
+      }
+    },
+    "voice.signal": {
+      "to": "one member",
+      "data": {
+        "from": "id",
+        "data": "string"
+      }
+    },
+    "removed": {
+      "to": "the removed member, before the connection closes",
+      "data": {}
+    },
+    "spar.updated": {
+      "to": "members who can view the channel",
+      "data": {
+        "spar": "spar"
+      }
+    },
+    "emoji.changed": {
+      "to": "members",
+      "data": {
+        "emojis": "[emoji]"
+      }
+    },
+    "appreciation": {
+      "to": "members",
+      "data": {
+        "appreciation": "appreciation"
+      }
+    },
+    "nudge": {
+      "to": "one member",
+      "data": {
+        "from": "id"
+      }
+    }
+  },
+  "errors": {
+    "bad_frame": "not JSON, or no cmd",
+    "unknown_command": "the cmd is not in this contract",
+    "bad_args": "an argument is missing, of the wrong type, or out of range",
+    "contract_mismatch": "the two sides speak different contracts (data: the server's version and hash)",
+    "not_signed_in": "sign in first (auth.hello, auth.prove), or the token is unknown or expired",
+    "not_allowed": "you do not hold the permission, or the target ranks at or above you",
+    "not_found": "no such channel, message, member, role or invite",
+    "invite_invalid": "the invite is unknown, used up or expired",
+    "auth_failed": "the proof did not match",
+    "removed": "this key was removed from the group",
+    "rate_limited": "too many commands; slow down",
+    "wrong_kind": "the channel's kind does not allow this",
+    "wait_first": "a one-way message takes no replies yet (data: repliesOpenAt)",
+    "not_your_turn": "it is not your turn, or the spar is not active"
+  }
+}

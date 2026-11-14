@@ -554,6 +554,7 @@ async function handleEmergenceApi(req, res, subPath) {
   }
 }
 
+let groupHttp = null;   // set once the group core is up (below, beside the relay)
 function serveStatic(req, res) {
   let urlPath;
   try { urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname); }
@@ -624,6 +625,13 @@ function serveStatic(req, res) {
       'Access-Control-Allow-Headers': 'Content-Type',
     });
     return res.end();
+  }
+
+  // ── THE GROUP ── commands over HTTP (/api/group/*), and the client library pages load
+  if (groupHttp && groupHttp(req, res)) return;
+  if (urlPath === '/group/client.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end(fs.readFileSync(path.join(__dirname, 'group', 'client.js')));
   }
 
   if (urlPath === '/_health') {
@@ -1047,6 +1055,18 @@ async function main() {
     // isn't online", so it is stated at boot rather than discovered later.
     console.error('[eravos] RELAY DID NOT ATTACH: ' + e.message);
     console.error('[eravos] the app will serve, but co-creation will not connect.');
+  }
+
+  // The group, same listener: WebSocket at /group, HTTP at /api/group/*, one core and one database behind both
+  // (group/core.js). Stated at boot if it cannot start, like the relay.
+  try {
+    const { createCore } = require('./group/core');
+    const groupCore = createCore({ dbPath: path.join(__dirname, 'data', 'group.db'), log: (m) => console.error(m) });
+    require('./group/ws').attachWs(groupCore, server, '/group');
+    groupHttp = require('./group/http').httpHandler(groupCore, '/api/group');
+    if (!groupCore.store.meta('ownerId')) console.log('[perspect] the group has no owner yet: run  node group/cli.js setup-code');
+  } catch (e) {
+    console.error('[perspect] THE GROUP DID NOT START: ' + e.message);
   }
 
   // Emergence, same listener, scoped to /api/emergence. Same §1.2
