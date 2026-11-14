@@ -1,11 +1,11 @@
 # builds the preview pages: one HTML each, the same frame and mock data (preview only)
 HEAD = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Perspect — {title} (preview)</title><link rel="stylesheet" href="../../group/web/kit.css"><style>{css}</style></head><body>
+<title>Perspect — {title} (preview)</title><link rel="stylesheet" href="../../group/web/kit.css"><link rel="stylesheet" href="shell.css"><style>{css}</style></head><body>
 <div class="app {wide}" id="app"><nav class="rail" id="rail"></nav><aside class="side" id="side"></aside>
 <main class="main" style="position:relative"><header class="top"><div class="t"><span class="ic">{ic}</span><span>{name}</span></div><div class="d">{desc}</div>{tools}</header>
 {main}</main>{right}</div>
 <script src="mock.js"></script><script>const {{ M, av, esc }} = MOCK; MOCK.shell('{page}', '{cur}'); {js}
-document.body.insertAdjacentHTML('beforeend', MOCK.note({note!r}));</script></body></html>'''
+MOCK.icons(); document.body.insertAdjacentHTML('beforeend', MOCK.note({note!r}));</script></body></html>'''
 U = lambda k: f'<b data-u="{k}" style="cursor:pointer;color:var(--c-{k})">NAME_{k}</b>'
 COMMON_CSS = '''.feed{flex:1;overflow:auto;padding:10px 0}.msg{display:flex;gap:12px;padding:5px 16px;position:relative}.msg:hover{background:#13131a}.msg .body{flex:1;min-width:0}
 .msg .h{display:flex;gap:8px;align-items:baseline}.msg .h time{color:var(--faint);font-size:11.5px}.msg p{margin:2px 0 0;color:#d9d6d0}.role{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,106,0,.15);color:var(--fire)}
@@ -13,9 +13,9 @@ COMMON_CSS = '''.feed{flex:1;overflow:auto;padding:10px 0}.msg{display:flex;gap:
 .kcard{margin-top:6px;max-width:560px}.sec{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 16px;flex:none;overflow:auto}
 .tab{padding:10px 12px;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}.tab.on{color:var(--text);border-color:var(--fire)}
-.set{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}.set:last-child{border:0}.set small{display:block;color:var(--faint);font-size:12px}
-.tg{width:38px;height:22px;border-radius:11px;background:var(--hover);position:relative;flex:none}.tg::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--dim)}
-.tg.on{background:var(--fire)}.tg.on::after{left:19px;background:#fff}select.in{width:auto}.new{font-size:10px;color:var(--amber);margin-left:6px}'''
+'''
+GLYPH = {'⚔': 'swords', '✦': 'bulb', '❖': 'sparkles', '✉': 'mail', '✧': 'heart', '💭': 'nudge', '🔊': 'volume', '🔇': 'mute', '🎙': 'mic', '🎧': 'headphones', '🖥': 'monitor', '⚙': 'settings',
+         '⟲': 'replay', '👀': 'eye', '📜': 'rule', '⚑': 'flag', '☺': 'smile', '＋': 'plus', '➤': 'send', '⋯': 'more', '📞': 'phone', '◎': 'target'}
 def names(s):
     for k,n,c in [('h','Horris','#ff8a3d'),('m','Maya','#7fd3ff'),('t','Theo','#b79bff'),('a','Ava','#ffd166'),('r','Rafe','#6ee7a8'),('j','Jun','#ff8fb1'),('s','Sol','#9ad0c2')]:
         s = s.replace(f'NAME_{k}', n).replace(f'var(--c-{k})', c)
@@ -26,7 +26,9 @@ def page(fn, **kw):
     d = dict(title='', css='', wide='', ic='', name='', desc='', tools='', main='', right='', page='', cur='', js='', note='')
     d.update(kw); d['css'] = COMMON_CSS + d['css']
     d['js'] = "document.querySelectorAll('.avslot').forEach(e => e.outerHTML = av(e.dataset.u)); document.querySelectorAll('.moodslot').forEach(e => e.outerHTML = MOCK.moodAv(e.dataset.u, 1));" + d['js']
-    open(fn, 'w', encoding='utf8').write(names(HEAD.format(**d)))
+    html = names(HEAD.format(**d))
+    for g, n in GLYPH.items(): html = html.replace(g, f'<i data-i="{n}"></i>')
+    open(fn, 'w', encoding='utf8').write(html)
 
 ROLE = '<span class="role">{}</span>'
 members_panel = '''<aside class="mem"><h4>Owner — 1</h4><div class="mrow"><div data-u="h" class="moodslot"></div><div>Horris<small>Owner</small></div></div>
@@ -41,7 +43,7 @@ compose = '''<div style="height:18px;padding:0 16px;color:var(--faint);font-size
 
 page('chat.html', title='Chat', wide='wide', ic='#', name='ideas', desc='Half-formed is welcome', page='chat', cur='ideas',
   note='Right-click any person (or click their name) for their card and menu. Toasts top right; reports reach whoever handles reports.',
-  js="""MOCK.toasts([['#ff5c8a','⚑','Report from Ava','A message in #philosophy · moderators only','<a class=\\'btn p\\' style=\\'height:26px;font-size:12px\\' href=\\'admin.html\\'>Review</a><button class=\\'btn g\\' style=\\'height:26px;font-size:12px\\'>Later</button>'],
+  js="""MOCK.toasts([['#ff5c8a','⚑','Report from Ava','A message in #philosophy · moderators only','<a class=\\'btn p\\' style=\\'height:26px;font-size:12px\\' href=\\'admin/reports.html\\'>Review</a><button class=\\'btn g\\' style=\\'height:26px;font-size:12px\\'>Later</button>'],
   ['#ffb347','⚔','Theo challenged you','“Every invention is mostly theft.” · 10 turns','<a class=\\'btn p\\' style=\\'height:26px;font-size:12px\\' href=\\'spar.html\\'>Accept</a><button class=\\'btn g\\' style=\\'height:26px;font-size:12px\\'>Decline</button>'],
   ['#a77bff','✧','Maya appreciated you','“For saying the quiet thing out loud.”'], ['#7fd3ff','💭','Jun is thinking of you','a nudge']]);""",
   main='<div class="feed">'
@@ -124,34 +126,45 @@ page('members.html', title='Members', ic='☺', name='Members & closeness', desc
    <div class="sec">My friends <span class="new">new</span></div><div class="card"><div class="bd muted">Maya · Theo · 1 request from Sol <button class="btn g" style="height:24px;font-size:12px">Accept</button></div></div></div>
   </div></div></div>''')
 
-page('profile.html', title='Profile', ic='☺', name='Horris', desc='Profile', page='profile', cur='',
-  css='.hero{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--raise)}.hero .banner{height:130px;background:linear-gradient(135deg,#ff8a3d,#ff5c8a 60%,#16161b)}.hero .bd{padding:0 22px 20px}.hero .moodwrap{margin-top:-80px}.hero .av{width:110px;height:110px;font-size:40px;border:6px solid var(--raise)}.hero .bubble{font-size:14px;padding:8px 14px;max-width:260px}.stat{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--raise)}.stat b{font-size:20px;display:block}',
-  note='The mood sits over the picture as a bubble. Editing is in Settings › Profile.',
-  main='''<div class="scroll"><div class="pad" style="max-width:900px">
-  <div class="hero"><div class="banner"></div><div class="bd"><div data-u="h" class="bigmood"></div>
-   <div class="row" style="justify-content:space-between;margin-top:6px"><div><h2 style="margin:0">Horris</h2><div class="muted">Owner · inventor · systems</div></div>
-   <div class="row"><a class="btn g" href="settings/profile.html">Edit profile</a></div></div>
-   <p style="margin:14px 0 0;max-width:620px">I build tools for thinking: ERAVOS, Emerge, Perspect. Ask me about sand.</p></div></div>
-  <div class="sec">Together</div><div class="row"><div class="stat"><b>14</b><span class="muted">spars</span></div><div class="stat"><b>9</b><span class="muted">ideas built on</span></div><div class="stat"><b>23</b><span class="muted">appreciations</span></div><div class="stat"><b>6</b><span class="muted">friends</span></div></div>
-  <div class="sec">Recent appreciations</div><div class="card"><div class="bd"><b style="color:#7fd3ff">Maya</b> <span class="faint">· 2h</span><br>For running the first meetup.</div></div>
-  <div class="sec">Ideas started</div><div class="card"><div class="bd">Wire the sand plotter into the ERAVOS canvas · <a href="idea.html">3 pieces</a></div></div>
-  </div></div>''', js="document.querySelectorAll('.bigmood').forEach(e => e.outerHTML = MOCK.moodAv(e.dataset.u));")
-
-def tg(on): return f'<span class="tg {"on" if on else ""}"></span>'
-page('admin.html', title='Admin', ic='⚙', name='Admin', desc='Roles, invites, channels, reports and the audit log', page='admin', cur='',
-  css='.mx{width:100%;border-collapse:collapse;font-size:13px}.mx th,.mx td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center}.mx th:first-child,.mx td:first-child{text-align:left}.mx td.y{color:var(--green)}.mx td.n{color:var(--faint)}',
-  note='Roles, ranks, overrides, invites, emoji and the audit log are built. Reports are new (backend addition).',
-  main='''<div class="tabs"><a class="tab">Group</a><a class="tab">Invites</a><a class="tab on">Roles &amp; permissions</a><a class="tab">Members</a><a class="tab">Channels</a><a class="tab">Emoji</a><a class="tab">Reports <span class="pill" style="background:var(--rose);color:#fff;border:0">1</span></a><a class="tab">Audit log</a></div>
-  <div class="scroll"><div class="pad">
-  <div class="row" style="justify-content:space-between"><div class="muted">You act only on roles ranked below yours, and grant only what you hold.</div><button class="btn p">＋ New role</button></div>
-  <div class="card" style="margin-top:12px;overflow:auto"><table class="mx"><tr><th>Permission</th><th>Owner<br><small class="faint">1000</small></th><th>Admin<br><small class="faint">800</small></th><th>Moderator<br><small class="faint">500</small></th><th>Builder<br><small class="faint">300 · custom</small></th><th>Member<br><small class="faint">100</small></th></tr>''' +
-  ''.join(f'<tr><td>{p}</td>' + ''.join(f'<td class="{"y" if v=="1" else "n"}">{"✓" if v=="1" else "—"}</td>' for v in row) + '</tr>' for p,row in [
-   ('See channels','11111'),('Post','11111'),('Delete others\' messages','11100'),('Join voice','11111'),('Invite people','11110'),('Manage members','11000'),('Manage channels','11000'),('Manage roles','11000'),('Group name & about','11000'),('Group emoji','11100'),('Read the audit log','11100'),('Handle reports','11100')]) +
-  '''</table></div>
-  <div class="grid2" style="margin-top:14px">
-   <div class="card"><div class="hd">⚑ Report waiting <span class="new">new</span></div><div class="bd"><b>Ava</b> reported a message in #philosophy · 20 min ago<div class="muted" style="margin:6px 0">“Felt dismissive of a newcomer.” — the message is attached, visible to moderators only.</div><div class="row"><button class="btn g">Open the message</button><button class="btn g">Talk to them</button><button class="btn g">Resolve</button></div></div></div>
-   <div class="card"><div class="hd">Audit log</div><div class="bd" style="font-family:var(--mono);font-size:12px;line-height:1.8">10:41 Maya&nbsp;&nbsp;member.set_role Theo → Moderator<br>10:30 Horris channel.set_override #organizers: Member ✕ see<br>10:02 cli&nbsp;&nbsp;&nbsp;&nbsp;invite.create 10 uses · Member<br>09:15 Maya&nbsp;&nbsp;emoji.add :spark:</div></div>
-  </div></div></div>''')
+page('profile.html', title='Profile', ic='☺', name='Profile', desc='Who someone is here, and what you have made together', page='profile', cur='',
+  css='''.pgrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:16px;align-items:start}.hero{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--raise)}
+.hero .banner{height:clamp(90px,14vh,150px)}.hero .bd{padding:0 22px 20px}.hero .moodwrap,.hero .hav{margin-top:-80px;display:inline-block}.hero .hav{margin-top:-50px}.hero .av{width:110px;height:110px;font-size:40px;border:6px solid var(--raise)}
+.hero .av .st{width:22px;height:22px;right:4px;bottom:4px;border-width:4px;border-color:var(--raise)}.hero .bubble{font-size:14px;padding:8px 14px;max-width:min(300px,70vw)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}.stat{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--raise)}.stat b{font-size:20px;display:block}
+.sw8{display:flex;gap:8px;flex-wrap:wrap}.sw8 button{width:28px;height:28px;border-radius:50%}.sw8 button.on{outline:2px solid #fff;outline-offset:2px}
+.pre{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}.pre button{display:grid;justify-items:center;gap:6px;padding:10px 4px;border-radius:10px;border:1px solid var(--line);font-size:12px;color:var(--dim)}.pre button.on{border-color:var(--fire);color:var(--text);background:var(--hover)}.pre .av{width:44px;height:44px;font-size:16px}.pre .av .st{display:none}
+@media (max-width:980px){.pgrid{grid-template-columns:minmax(0,1fr)}}''',
+  note='Profile and mood are their own page, not a settings section. On your own profile the bubble is the mood editor.',
+  main='<div class="scroll"><div class="pad" id="prof"></div></div>',
+  js=r'''const q = new URLSearchParams(location.search), k = M[q.get('u')] ? q.get('u') : MOCK.ME, u = M[k], mine = k === MOCK.ME, I = MOCK.I;
+const n = (s) => 3 + (u.name.charCodeAt(0) * s) % 20;
+function draw(edit) {
+  document.querySelector('.top .t span:last-child').textContent = u.name;
+  document.getElementById('prof').innerHTML = `<div class="pgrid"><div>
+   <div class="hero"><div class="banner" style="background:linear-gradient(135deg,${u.c},#ff5c8a 60%,#16161b)"></div><div class="bd">${(u.mood || mine) ? MOCK.moodAv(k, 0, mine) : `<div class="hav">${av(k)}</div>`}
+    <div class="row" style="justify-content:space-between;margin-top:6px"><div><h2 style="margin:0">${u.name}</h2><div class="muted">${u.role} · ${u.note}</div></div>
+    <div class="row">${mine ? `<button class="btn ${edit ? 'p' : 'g'}" id="ed">${I('pencil')} ${edit ? 'Done' : 'Edit profile'}</button>`
+      : `<button class="btn p">${I('bulb')} Co-create</button><button class="btn g">${I('swords')} Spar</button><button class="btn g">${I('phone')} Call</button><button class="btn g">${I('userplus')} Add friend</button><button class="btn g" data-more>${I('more')}</button>`}</div></div>
+    <p style="margin:14px 0 0;max-width:680px">${esc(u.about) || '<span class="faint">Nothing written yet.</span>'}</p></div></div>
+   <div class="sec">${mine ? 'Together with the group' : 'Together with you'}</div><div class="stats"><div class="stat"><b>${n(7)}</b><span class="muted">spars</span></div><div class="stat"><b>${n(3)}</b><span class="muted">ideas built on</span></div><div class="stat"><b>${n(11)}</b><span class="muted">appreciations</span></div><div class="stat"><b>${n(5) % 9 + 1}</b><span class="muted">friends</span></div></div>
+   ${edit ? '' : side()}</div>
+   <div>${edit ? editor() : `<div class="sec" style="margin-top:0">Recent appreciations</div><div class="card"><div class="bd"><b data-u="m" style="cursor:pointer;color:#7fd3ff">Maya</b> <span class="faint">· 2h</span><br>${mine ? 'For running the first meetup.' : 'For the question that unstuck my week.'}</div></div>
+    <div style="height:8px"></div><div class="card"><div class="bd"><b data-u="j" style="cursor:pointer;color:#ff8fb1">Jun</b> <span class="faint">· yesterday</span><br>For listening all the way to the end.</div></div>
+    ${mine ? '' : `<div class="row" style="margin-top:10px"><button class="btn g">${I('heart')} Appreciate ${u.name}</button><button class="btn g">${I('nudge')} Nudge</button></div>`}`}</div></div>`;
+  const ed = document.getElementById('ed'); if (ed) ed.onclick = () => draw(!edit);
+  const more = document.querySelector('[data-more]'); if (more) more.onclick = (e) => { e.stopPropagation(); MOCK.menu(k, e.clientX - 200, e.clientY + 12); };
+  document.querySelectorAll('.pre button').forEach(b => b.onclick = () => { u.preset = b.dataset.p; draw(true); });
+  document.querySelectorAll('.sw8 button').forEach(b => b.onclick = () => { u.c = b.dataset.c; draw(true); });
+}
+const side = () => `<div class="sec">Ideas started</div><div class="card"><div class="bd">${mine ? 'Wire the sand plotter into the ERAVOS canvas' : 'A plotter that draws with sand'} · <a href="idea.html">3 pieces</a></div></div>`;
+const editor = () => `<div class="card"><div class="hd">${I('pencil')} Edit profile</div><div class="bd">
+  <div class="muted" style="font-size:12.5px">Your mood is the bubble over your picture — click it to change it.</div>
+  <label class="lbl">Name</label><input class="in" value="${u.name}"><label class="lbl">A line about you</label><input class="in" value="${esc(u.note)}">
+  <label class="lbl">About</label><textarea class="in" rows="3">${esc(u.about)}</textarea>
+  <label class="lbl">Picture — your letter, or one that moves</label><div class="pre">${MOCK.PRESETS.map(([p, t]) => `<button data-p="${p}" class="${(u.preset || '') === p ? 'on' : ''}">${av(k, 0, p).replace('data-u', 'data-x')}${t}</button>`).join('')}</div>
+  <label class="lbl">Colour and banner</label><div class="sw8">${['#ff8a3d', '#7fd3ff', '#b79bff', '#ffd166', '#6ee7a8', '#ff8fb1', '#9ad0c2'].map(c => `<button data-c="${c}" class="${c === u.c ? 'on' : ''}" style="background:${c}"></button>`).join('')}</div>
+  <div class="row" style="margin-top:14px"><button class="btn p" onclick="draw(false)">Save</button><button class="btn g" onclick="draw(false)">Cancel</button></div></div></div>`;
+draw(q.get('edit') === '1' && mine);''')
 
 open('join.html','w',encoding='utf8').write('''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Perspect — Join (preview)</title><link rel="stylesheet" href="../../group/web/kit.css">
 <style>.wrap{min-height:100vh;display:grid;place-items:center;padding:16px}.box{width:100%;max-width:440px}.brand{font-size:26px;font-weight:800}.brand b{background:linear-gradient(135deg,var(--fire),var(--rose));-webkit-background-clip:text;color:transparent}</style></head><body>
