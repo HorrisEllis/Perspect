@@ -90,7 +90,15 @@ t('his confirm is what pairs, and the code is then spent', () => {
 t('doRegister sets role=partner when there is a pending invite', () => {
   // Without the role the pairing state machine is correct and the ACCOUNT is
   // not — role==='partner' is what routes it into the partner path at all.
-  assert.ok(/window\._pendingInvite \? 'partner' : undefined/.test(kernel));
+  assert.ok(/window\._pendingInvite \? 'partner' : noAdmin \? 'admin' : undefined/.test(kernel));
+});
+t('no account is built in: no seeded names, no password hashes in the source', () => {
+  assert.ok(!/Hash\s*=\s*'[0-9a-f]{64}'/.test(kernel), 'a password hash is in the source');
+  assert.ok(!/existing\[\s*'(james|raven|anjali)'\s*\]/.test(kernel), 'a named account is seeded');
+});
+t('a fresh install opens registration, and its first account is the admin', () => {
+  assert.ok(/if \(!Object\.keys\(existing\)\.length && DB\.get\('eravors_reg_enabled', null\) === null\) DB\.set\('eravors_reg_enabled', true\)/.test(kernel));
+  assert.ok(/const noAdmin = !Object\.values\(S\.users \|\| \{\}\)\.some\(u => u && \(u\.role === 'admin' \|\| u\.isAdmin\)\)/.test(kernel));
 });
 t('doRegister actually calls scan() and emits the request', () => {
   assert.ok(/eravosPairing\.scan\(window\._pendingInvite/.test(kernel),

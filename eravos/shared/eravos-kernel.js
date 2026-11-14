@@ -24,9 +24,9 @@ const _activeToasts = []; // [{ el, msg, dismissTimer }], oldest first
 
 (function inlineManifest() {
   const manifest = {
-    name: "Eravos",
-    short_name: "Eravos",
-    description: "Eravos – love OS for two",
+    name: "Perspect",
+    short_name: "Perspect",
+    description: "Perspect – love OS for two",
     start_url: "/",
     display: "standalone",
     background_color: "#08050a",
@@ -66,7 +66,7 @@ const _activeToasts = []; // [{ el, msg, dismissTimer }], oldest first
   // file:// — CDN blocked entirely
   if (location.protocol === 'file:') {
     _stubPeer();
-    console.log('[Eravos] Offline mode — bridge channel active');
+    console.log('[Perspect] Offline mode — bridge channel active');
     return;
   }
   const script = document.createElement('script');
@@ -76,7 +76,7 @@ const _activeToasts = []; // [{ el, msg, dismissTimer }], oldest first
     // CDN unreachable — install stub silently, bridge channel is the primary transport
     _stubPeer();
     window._peerJSFailed = true;
-    console.log('[Eravos] PeerJS CDN offline — bridge channel active');
+    console.log('[Perspect] PeerJS CDN offline — bridge channel active');
   };
   document.head.appendChild(script);
 })();
@@ -279,7 +279,7 @@ self.addEventListener('message', evt => {
     }
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k.startsWith('eravos-')).map(k => caches.delete(k)))
-    ).then(() => console.log('[SW] All Eravos caches cleared'));
+    ).then(() => console.log('[SW] All Perspect caches cleared'));
   };
 })();
 
@@ -1055,52 +1055,11 @@ async function importFullBackup(input) {
 // ═══════════════════════════════════════════════════════════════════
 // ── CONTAINED ACCOUNTS — SHA-256 hashed, force-seeded on first load ──
 // Account hashes pre-computed — credentials never in plaintext
-(function seedContainedAccounts(){
-  const jHash = '1d57231c3c07a972dedf1a073b4eaeca80c1043280243f3979aab4fa36e4df9c';
-  const rHash = '7f942b6702ad4e583ef3c1a793d9c8e8bcb9acadd51fbcc45468f3247f418145';
+(function firstRun(){
+  // No account is built in: no names, no password hashes in the source. On a fresh install registration is
+  // open, and the first account made becomes the admin (doRegister); from then on the admin decides.
   const existing = DB.get('eravors_users', {});
-  // Migrate legacy djb2 hashes if present
-  // Legacy djb2 -> SHA-256 migration. Keyed by the OLD HASH VALUE, not by a
-  // person's name: naming an account here is what made the partner slot
-  // un-renameable in the first place. A renamed account still migrates.
-  var LEGACY_HASHES = { '792847702': jHash, '1764240011': rHash };
-  for (var _lk in existing) {
-    var _lp = existing[_lk] && existing[_lk].password;
-    if (_lp && LEGACY_HASHES[_lp]) existing[_lk].password = LEGACY_HASHES[_lp];
-  }
-  // Force-seed both accounts (preserve extra fields like avatar, theme overrides)
-  existing['james'] = Object.assign({}, existing['james']||{}, {
-    name:'James', email:'james', password:jHash,
-    mode:'solo', theme:'', role:'admin',
-    // Opaque by construction. `eravos-james-fixed` announced who made every
-    // pairing code that carried it (found by test/pairing.test.mjs). Existing
-    // installs keep whatever they have — migrating a peer id would break a
-    // live pairing — but nothing new is minted with a name in it.
-    peerId: DB.get('eravors_my_peer_id', null) || (() => {
-      const id = 'eravos-' + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
-      DB.set('eravors_my_peer_id', id);
-      return id;
-    })(), partnerId:null, created:1700000000000,
-    dbPrefix:'james', isAdmin:true
-  });
-  // §5.3 ROOT CAUSE FIX. This block previously force-seeded the partner
-  // account unconditionally on every page load:
-  //     existing[<partner>] = Object.assign({}, existing[<partner>]||{}, {...});
-  // which meant ANY rename made through the UI was silently reverted on the
-  // next reload. The edit appeared to work and then quietly undid itself --
-  // §1.2, a silent failure that corrupts state instead of crashing.
-  //
-  // The partner slot is now DATA, not a constant. It is seeded once, if and
-  // only if no partner account exists at all. After that, shared/eravos-admin.js
-  // is the single write authority for it (§10.1) and the seeder defers.
-  // SOLO IS THE DEFAULT (v0.12.0). This block used to seed a partner account
-  // whether or not one existed, so every install pretended to be a pair --
-  // relational derivations ran against a person who was not there (§1.2, a
-  // falsehood in the data, not just the UI).
-  //
-  // Nothing is seeded now. A partner account is created only when a real
-  // person accepts an invite or scans a code (shared/eravos-pairing.js).
-  DB.set('eravors_users', existing);
+  if (!Object.keys(existing).length && DB.get('eravors_reg_enabled', null) === null) DB.set('eravors_reg_enabled', true);
 })();
 
 // ── PARTNER SLOT — seeded ONCE, same "only if none exists" rule as above ──
@@ -1115,31 +1074,7 @@ async function importFullBackup(input) {
 // same claim as two accounts having actually completed the QR handshake;
 // that still happens for real, from the login screen or Settings ▸ Invite
 // Partner, the same as it would for anyone else.
-(function seedPartnerSlotOnce(){
-  const existing = DB.get('eravors_users', {});
-  const hasPartner = Object.values(existing).some(u => u && u.role === 'partner');
-  if (hasPartner) return;
-  // Real password's SHA-256 -- the plaintext does NOT belong in source, even
-  // in a comment. A hash in a committed file is already a soft exposure (offline
-  // brute-force is possible if this repo ever leaks); a comment naming the
-  // plaintext right next to it defeats the hash entirely. If this needs
-  // changing later, reset it from Settings > Admin > Account Access instead
-  // of editing this file.
-  const anjaliHash = '171abc3671eb8c7c7850fed2b91a38b385d17c32a4aaa129be12fbd14c728119';
-  const peerId = 'eravos-' + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
-  existing['anjali'] = {
-    name: 'Anjali', email: 'anjali', password: anjaliHash,
-    mode: 'duo', role: 'partner', peerId, partnerId: null,
-    created: Date.now(), dbPrefix: 'anjali'
-  };
-  DB.set('eravors_users', existing);
-  // Registration itself still defaults to CLOSED (see applyRegState) — that
-  // default is deliberate and tested (test/registration.test.mjs), not a
-  // bug. Turning it on here is the one-time equivalent of an admin flipping
-  // the Settings ▸ Admin toggle, done once because an account was just
-  // requested directly. It can be switched off again from that same panel.
-  if (DB.get('eravors_reg_enabled', null) === null) DB.set('eravors_reg_enabled', true);
-})();
+// (the seeded partner account is gone: a partner joins by invite or QR, shared/eravos-pairing.js)
 
 
 
@@ -1422,10 +1357,12 @@ async function doRegister(){
   // into that path at all. Registering via an invite with no role set
   // would leave the pairing state machine correct but the underlying
   // mesh connection with nowhere real to route to.
-  const role = window._pendingInvite ? 'partner' : undefined;
+  // the first account on a fresh install is the admin; a person arriving by invite is the partner
+  const noAdmin = !Object.values(S.users || {}).some(u => u && (u.role === 'admin' || u.isAdmin));
+  const role = window._pendingInvite ? 'partner' : noAdmin ? 'admin' : undefined;
   const recoveryEl = document.getElementById('r-recovery');
   const recoveryViaPartner = !!(recoveryEl && recoveryEl.checked);
-  const user={name,email,mode,password:hash,created:Date.now(),recoveryViaPartner,...(role ? {role} : {})};
+  const user={name,email,mode,password:hash,created:Date.now(),recoveryViaPartner,...(role ? {role} : {}),...(role === 'admin' ? {isAdmin:true} : {})};
   S.users[email]=user;
   DB.set('eravors_users',S.users);
   loginSuccess(user);
@@ -1657,7 +1594,7 @@ function postLoginHook(user) {
   // Role-based identity — no plaintext name checks in logic
   const isAdmin  = user.role === 'admin';
   const isPartnerRole = user.role === 'partner';
-  const isJames  = isAdmin;  // admin == James for this deployment
+  const isJames  = isAdmin;  // the admin account (the name is historical)
 
   // Load all persistent data
   S.feeling = DB.get('eravors_feeling', {name:'',emoji:'',color:'',intensity:5,note:'',ts:0});
@@ -2132,7 +2069,7 @@ async function refreshEmergenceSignal() {
     // real, honest failure -- logged, not swallowed, but never thrown
     // into a caller that isn't expecting a rejected promise (this is
     // fired off in the background, nothing awaits it)
-    console.warn('[Eravos] Emergence signal refresh failed (server not running locally?):', e.message);
+    console.warn('[Perspect] Emergence signal refresh failed (server not running locally?):', e.message);
   }
 }
 
@@ -3858,7 +3795,7 @@ async function loadEravosVersion() {
   if (headerEl) headerEl.textContent = 'v' + _eravosVersion;
   return _eravosVersion;
 }
-loadEravosVersion().then(v => log('Eravos v' + v + ' initialized', 'ok'));
+loadEravosVersion().then(v => log('Perspect v' + v + ' initialized', 'ok'));
 
 // Was: setTimeout(() => testClaude(true), 3000) here — a silent, direct
 // call to https://api.anthropic.com/v1/messages on every single app
@@ -4622,7 +4559,7 @@ const _cryptoSession = { aesKey: null, myIdentity: null, ready: false };
 
 function _myRole() {
   const uname = (S.user?.email || S.user?.name || '').toLowerCase().trim();
-  if (S.user?.role === 'admin' || uname === 'james') return 'james';
+  if (S.user?.role === 'admin') return 'admin';
   if (S.user?.role === 'partner') return 'partner';
   return uname || 'solo';
 }
@@ -4635,7 +4572,7 @@ function getPartnerDisplayName() {
     const s = eravosPairing.state();
     if (s && s.partner && s.partner.name) return s.partner.name;
   }
-  return S.user?.role === 'admin' ? 'your partner' : 'James';
+  return 'your partner';
 }
 
 function _ensureCryptoIdentity() {
@@ -5301,7 +5238,7 @@ function requestConnectionLinkUp() {
     Notification.requestPermission();
   }
 
-  showToast("💫 Not online yet — Eravos will connect the moment she opens the app");
+  showToast("💫 Not online yet — Perspect will connect the moment they open the app");
   switchTab('sparring');
 }
 
@@ -7259,7 +7196,7 @@ if (typeof window !== 'undefined' && window.eravosDesktop) {
   // suppresses it if you are already looking at the app.
   if (typeof eravosChat !== 'undefined' && eravosChat) {
     eravosChat.on('message', (m) => {
-      if (m && !m.mine) window.eravosDesktop.notify('Eravos', m.text ? m.text.slice(0, 120) : 'A message');
+      if (m && !m.mine) window.eravosDesktop.notify('Perspect', m.text ? m.text.slice(0, 120) : 'A message');
     });
   }
 }
@@ -9075,7 +9012,7 @@ var OB_DATA = {};
 var OB_STEP = 0;
 
 const OB_STEPS = [
-  { id:'welcome', title:'Welcome to Eravos', skip:false,
+  { id:'welcome', title:'Welcome to Perspect', skip:false,
     render:() => `<div style="text-align:center;padding:8px 0 20px">
       <div style="font-size:3rem;margin-bottom:16px">🔥</div>
       <p style="font-family:var(--fb);font-size:1.05rem;color:var(--amber);margin-bottom:16px;line-height:1.7">This is your co-created space.</p>
@@ -9086,7 +9023,7 @@ const OB_STEPS = [
   { id:'names', title:'What do we call you?', skip:true,
     render:() => `
       <label class="fl">Your display name</label>
-      <input type="text" id="ob-display-name" placeholder="James" value="${OB_DATA.displayName||''}" style="margin-bottom:14px">
+      <input type="text" id="ob-display-name" placeholder="Your name" value="${OB_DATA.displayName||''}" style="margin-bottom:14px">
       <label class="fl">What does your partner call you? <span style="color:var(--dim);font-size:.75rem">(optional)</span></label>
       <input type="text" id="ob-pet-name" placeholder="a nickname..." value="${OB_DATA.petName||''}" style="margin-bottom:14px">
       <label class="fl">What do you call your relationship? <span style="color:var(--dim);font-size:.75rem">(optional)</span></label>
@@ -9268,7 +9205,7 @@ function obComplete() {
   DB.set('eravors_onboarding_draft',null);
   const modal=document.getElementById('onboarding-modal'); if(modal) modal.style.display='none';
   if(OB_DATA.displayName&&S.user){S.user.name=OB_DATA.displayName;DB.set('eravors_user',S.user);const e=document.getElementById('user-name-display');if(e) e.textContent=OB_DATA.displayName;}
-  showToast('✦ Welcome to Eravos');
+  showToast('✦ Welcome to Perspect');
   if(typeof renderOnboardingAnswers==='function') renderOnboardingAnswers();
   log('Onboarding complete','ok');
 }
@@ -9302,7 +9239,7 @@ window.generateLoveLetter = async function() {
   if(status){status.style.display='block';status.textContent='✦ Oracle writing...';}
   const feeling=S.feeling?.name?`Current feeling: ${S.feeling.emoji} ${S.feeling.name} at intensity ${S.feeling.intensity}/10.`:'';
   const text=await callAI(
-    `You are the Eravos Oracle. Write a deeply personal, poetic love letter — intimate, specific, 3-4 paragraphs. Not generic. No "Dear" opener. ${feeling}`,
+    `You are the Perspect Oracle. Write a deeply personal, poetic love letter — intimate, specific, 3-4 paragraphs. Not generic. No "Dear" opener. ${feeling}`,
     'Write a love letter for my partner.', null, {context:'poetry'}
   );
   const ta=document.getElementById('msg-compose');
@@ -9394,7 +9331,7 @@ window.getPrimingPrefix = function() {
   if (ob.non_negotiable) parts.push(`Non-negotiables: ${ob.non_negotiable.slice(0,100)}.`);
   if (ob.romance_style?.length) parts.push(`Romance style: ${ob.romance_style.join(', ')}.`);
   if (ob.attachment)  parts.push(`Attachment pattern: ${ob.attachment}.`);
-  if (ob.intention)   parts.push(`Their intention in Eravos: ${ob.intention.slice(0,120)}.`);
+  if (ob.intention)   parts.push(`Their intention in Perspect: ${ob.intention.slice(0,120)}.`);
 
   return base + (parts.length ? '\n\n[User context: ' + parts.join(' ') + ']' : '');
 };
@@ -9782,7 +9719,7 @@ function showLoveBloom(msg, from) {
   bloom.innerHTML = `
     <div class="love-bloom-inner">
       <div class="love-bloom-icon">💌</div>
-      <div class="love-bloom-from">${from || 'James'} sent you love</div>
+      <div class="love-bloom-from">${from || 'Your partner'} sent you love</div>
       <div class="love-bloom-msg">${msg}</div>
       <button class="btn p" onclick="document.getElementById('love-bloom').remove()" style="margin-top:16px;font-size:.75rem">Close ✕</button>
     </div>
@@ -9904,7 +9841,7 @@ function renderLoveInbox() {
   el.innerHTML = inbox.map(m => `
     <div class="love-inbox-item">
       <div class="love-inbox-msg">${m.message}</div>
-      <div class="love-inbox-meta small">${m.from || 'James'} · ${new Date(m.ts).toLocaleString()}</div>
+      <div class="love-inbox-meta small">${m.from || 'Your partner'} · ${new Date(m.ts).toLocaleString()}</div>
     </div>
   `).join('');
 }
@@ -10869,7 +10806,7 @@ async function generateLoveLetter() {
   try {
     const feeling = S.feeling?.name ? `Their current feeling: ${S.feeling.emoji} ${S.feeling.name}.` : '';
     const text = await callAI(
-      `You are the Eravos Oracle, coaching someone on how to write their own love letter — you are not writing it for them. ${feeling} Teach: (1) one way to open without "Dear ___", (2) how to be specific instead of generic (name one concrete memory/detail technique), (3) how to close with warmth. Then give ONE short example fragment (a single sentence, clearly labeled "example fragment — adapt this, don't copy it") of the kind of specificity you mean. Keep the whole thing under 150 words.`,
+      `You are the Perspect Oracle, coaching someone on how to write their own love letter — you are not writing it for them. ${feeling} Teach: (1) one way to open without "Dear ___", (2) how to be specific instead of generic (name one concrete memory/detail technique), (3) how to close with warmth. Then give ONE short example fragment (a single sentence, clearly labeled "example fragment — adapt this, don't copy it") of the kind of specificity you mean. Keep the whole thing under 150 words.`,
       'Coach me on writing a love letter to my partner.',
       null
     );
@@ -10884,7 +10821,7 @@ async function generateLovePoem() {
   try {
     const feeling = S.feeling?.name ? `inspired by the feeling: ${S.feeling.emoji} ${S.feeling.name}` : 'about longing, love, and interdependence';
     const text = await callAI(
-      `You are the Eravos Oracle, coaching someone on writing their own short poem for their partner, ${feeling} — you are not writing the poem for them. Teach: (1) one concrete image-over-abstraction technique (e.g. "their hands" beats "your love"), (2) how line breaks control pacing/breath, (3) permission that it doesn't need to rhyme. Give ONE example line, clearly labeled "example line — not for reuse". Under 130 words.`,
+      `You are the Perspect Oracle, coaching someone on writing their own short poem for their partner, ${feeling} — you are not writing the poem for them. Teach: (1) one concrete image-over-abstraction technique (e.g. "their hands" beats "your love"), (2) how line breaks control pacing/breath, (3) permission that it doesn't need to rhyme. Give ONE example line, clearly labeled "example line — not for reuse". Under 130 words.`,
       'Coach me on writing a poem for my partner.',
       null
     );
@@ -10898,7 +10835,7 @@ async function generateAffirmation() {
   if (status) { status.style.display = 'block'; status.textContent = '✦ Oracle thinking...'; }
   try {
     const text = await callAI(
-      `You are the Eravos Oracle, coaching someone on writing a real affirmation for their partner — you are not writing it for them. Teach the one core move: naming a SPECIFIC thing you witnessed in them (an action, a quality they showed recently) rather than a generic compliment — that's what makes it land like truth instead of flattery. Give ONE example structure (not filled in with their partner's actual traits, just the shape), labeled "structure — fill in your own specifics". Under 100 words.`,
+      `You are the Perspect Oracle, coaching someone on writing a real affirmation for their partner — you are not writing it for them. Teach the one core move: naming a SPECIFIC thing you witnessed in them (an action, a quality they showed recently) rather than a generic compliment — that's what makes it land like truth instead of flattery. Give ONE example structure (not filled in with their partner's actual traits, just the shape), labeled "structure — fill in your own specifics". Under 100 words.`,
       'Coach me on writing an affirmation for my partner.',
       null
     );
@@ -12329,7 +12266,7 @@ function _openChannel() {
       type:     'CALLTO_REGISTER',
       callto: {
         id:       ERAVOS_IDENTITY.uuid,
-        label:    'Eravos',
+        label:    'Perspect',
         selector: 'eravos:dashboard',
         action:   'focus',
         source:   'eravos',

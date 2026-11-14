@@ -216,7 +216,7 @@
     if (selection == null || (Array.isArray(selection) && !selection.length)) {
       if (!def.allowSkip && !opts.forceSkip) {
         throw new Error('[choice] resolve(): "' + promptId + '" was declared allowSkip:false. ' +
-                        'Pass forceSkip to override — but reconsider: nothing in Eravos is forced.');
+                        'Pass forceSkip to override — but reconsider: nothing in Perspect is forced.');
       }
       // A skip records a skip. NOT a default, NOT the first option, NOT a guess.
       return { promptId: promptId, skipped: true, value: null, source: 'skipped', ts: Date.now() };

@@ -97,7 +97,7 @@ t('multi-select prompts accept several, mixing built-in and custom', () => {
 t('allowSkip:false still requires an explicit override — and says reconsider', () => {
   const c=mkChoice();
   c.define({id:'consent',label:'Both agree?',options:['Yes'],allowSkip:false});
-  assert.throws(()=>c.resolve('consent',null), /nothing in Eravos is forced/);
+  assert.throws(()=>c.resolve('consent',null), /nothing in Perspect is forced/);
   assert.strictEqual(c.resolve('consent',null,{forceSkip:true}).skipped,true);
 });
 t('§12.5 health reports prompts never extended AND orphaned customs', () => {

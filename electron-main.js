@@ -89,7 +89,7 @@ ipcMain.on('eravos:notify', (_e, msg) => {
   // Suppressed when you are already looking at the app — a notification for
   // something in front of you is noise.
   if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) return;
-  new Notification({ title: (msg && msg.title) || 'Eravos', body: (msg && msg.body) || '' }).show();
+  new Notification({ title: (msg && msg.title) || 'Perspect', body: (msg && msg.body) || '' }).show();
 });
 
 // THE LOCK. There was none — so a second launch (or any eravos:// click on
@@ -196,7 +196,7 @@ async function startAiBridge() {
 
   aiBridgeWindow = new BrowserWindow({
     width: 1100, height: 780,
-    title: 'Eravos AI Bridge — ' + provider.name,
+    title: 'Perspect AI Bridge — ' + provider.name,
     show: false, // background by design -- opened via the tray menu for the one-time real login
     webPreferences: { session: providerSession, contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -228,7 +228,7 @@ function createWindow(port) {
     minWidth: 480,
     minHeight: 600,
     icon: getIconPath(),
-    title: 'Eravos',
+    title: 'Perspect',
     backgroundColor: '#08050a',
 
     // ── Borderless (v0.29.3) ─────────────────────────────────────────────
@@ -296,10 +296,10 @@ function createWindow(port) {
 
 function createTray(port) {
   const t = new Tray(getIconPath());
-  t.setToolTip('Eravos — running on port ' + port);
+  t.setToolTip('Perspect — running on port ' + port);
   const items = [
     {
-      label: 'Open Eravos', click: () => {
+      label: 'Open Perspect', click: () => {
         if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
       },
     },
@@ -320,7 +320,7 @@ function createTray(port) {
   items.push(
     { type: 'separator' },
     {
-      label: 'Quit Eravos', click: () => {
+      label: 'Quit Perspect', click: () => {
         isQuitting = true;
         app.quit();
       },
@@ -346,9 +346,9 @@ app.whenReady().then(async () => {
   try {
     serverPort = await startServer();
   } catch (e) {
-    console.error('[electron-main] Eravos server failed to start:', e.message);
+    console.error('[electron-main] Perspect server failed to start:', e.message);
     const { dialog } = require('electron');
-    dialog.showErrorBox('Eravos could not start', e.message +
+    dialog.showErrorBox('Perspect could not start', e.message +
       '\n\nCheck if another instance is already running, or run eravos-serve.js --show-config to see what it would have used.');
     app.quit();
     return;

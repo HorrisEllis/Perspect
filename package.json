@@ -1,5 +1,5 @@
 {
-  "name": "eravos-desktop",
+  "name": "perspect-desktop",
   "version": "0.30.2",
   "description": "Eravos, all in one: the app, the co-creation relay, Emergence's space-distance signal, and real SMTP sending/dev-catcher, all in a single Electron process with a system tray.",
   "private": true,
@@ -14,8 +14,8 @@
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "world.rheon.eravos",
-    "productName": "Eravos",
+    "appId": "world.rheon.perspect",
+    "productName": "Perspect",
     "directories": {
       "output": "dist"
     },
@@ -74,7 +74,7 @@
     ],
     "protocols": [
       {
-        "name": "Eravos",
+        "name": "Perspect",
         "schemes": [
           "eravos"
         ]

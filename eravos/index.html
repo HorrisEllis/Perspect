@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Eravos</title>
+<title>Perspect</title>
 <link rel="manifest" href="app.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Eravos">
+<meta name="apple-mobile-web-app-title" content="Perspect">
 <!-- Android/Chrome: mobile-web-app-capable is legacy (display:standalone in
      the manifest above supersedes it) but costs nothing to include for
      older WebViews. theme-color already covers the modern Android path. -->
@@ -80,11 +80,11 @@
   <div id="homepage" class="homepage">
     <div class="hp-hero">
       <div class="login-fire" style="margin:0 auto 18px">🔥</div>
-      <div class="hp-title">Eravos</div>
+      <div class="hp-title">Perspect</div>
       <div class="hp-tagline">Built for the distance between you — a private, self-hosted space for two people to actually understand each other</div>
       <p class="hp-lede">
         Not a habit tracker with a couple's skin on it. Not a chatbot pretending to be your relationship.
-        Eravos is a co-creation space — <em>relational intelligence</em>, not relationship surveillance —
+        Perspect is a co-creation space — <em>relational intelligence</em>, not relationship surveillance —
         for two people who want to grow closer on purpose, together, without a company reading their feelings.
         Everything here syncs directly device-to-device, so it works exactly the same whether you're across
         the room or across an ocean — distance was never the thing standing between understanding each other.
@@ -99,7 +99,7 @@
       <div class="hp-section-title">Us vs. the problem — never each other</div>
       <p class="hp-philosophy-body">
         Most apps built for couples quietly put you on opposite teams — who logged in more, who initiated less,
-        a scoreboard dressed up as insight. Eravos is built on the opposite premise: the two of you are never
+        a scoreboard dressed up as insight. Perspect is built on the opposite premise: the two of you are never
         the problem. Whatever's actually hard — a rupture, a pattern, a need that's gone unspoken — <em>that's</em>
         the thing you're both working against, together. Nothing here is designed to keep score.
       </p>
@@ -107,7 +107,7 @@
         <div class="hp-pillar">
           <div class="hp-pillar-icon">🕊</div>
           <div class="hp-pillar-title">Nudge, never demand</div>
-          <div class="hp-pillar-body">Eravos suggests. It never insists. Every prompt is skippable, every share is optional, every "no" is a complete answer.</div>
+          <div class="hp-pillar-body">Perspect suggests. It never insists. Every prompt is skippable, every share is optional, every "no" is a complete answer.</div>
         </div>
         <div class="hp-pillar">
           <div class="hp-pillar-icon">🔒</div>
@@ -148,7 +148,7 @@
          entirely, not hidden -- personal visual content for one specific
          person, already inert (display:none) before this, its CSS/JS
          support already removed from eravos-kernel.css/.js. -->
-    <div class="login-title">Eravos</div>
+    <div class="login-title">Perspect</div>
     <div class="login-sub">✦ YOUR SACRED CO-CREATION SPACE ✦</div>
     <!-- login tab bar removed — Enter the Space button is the only action -->
     <div id="login-form">
@@ -698,7 +698,7 @@
          from eravos-kernel.css, so leaving the markup would have made
          it start showing by default instead of staying hidden. -->
     <div id="title-block">
-      <h1>Eravos</h1>
+      <h1>Perspect</h1>
       <div class="tagline">✦ CO-CREATION · LOVE · INTERDEPENDENCE · EMERGENCE ✦</div>
       <div id="header-version-display" style="font-family:var(--fm);font-size:.58rem;letter-spacing:.1em;color:var(--dim);opacity:.6;margin-top:2px" title="If this doesn't match the version you just unzipped, you're looking at a stale build or cache — see Settings → System → Clear Cache">…</div>
     </div>
@@ -786,7 +786,7 @@
     <div class="msm-box">
       <span class="msm-icon" id="msm-icon">⇄</span>
       <div class="msm-title" id="msm-title">Switch mode?</div>
-      <div class="msm-body" id="msm-body">This will change how Eravos stores and shares your data.</div>
+      <div class="msm-body" id="msm-body">This will change how Perspect stores and shares your data.</div>
       <div class="msm-actions">
         <button class="msm-cancel" onclick="cancelModeSwitch()">Stay</button>
         <button class="msm-confirm" id="msm-confirm-btn" onclick="confirmModeSwitch()">Switch</button>
@@ -925,9 +925,9 @@
   <div class="modal" id="invite-prompt">
     <div class="modal-inner ip-inner">
       <h3 class="ip-title">Is there someone you're building this with?</h3>
-      <p class="ip-body">Eravos works completely on your own — the vault, the codex, the
+      <p class="ip-body">Perspect works completely on your own — the vault, the codex, the
         lattice, all of it. Sharing it with someone is optional, and you can do it later
-        from Settings at any time. If you're both already using Eravos on your own,
+        from Settings at any time. If you're both already using Perspect on your own,
         connecting doesn't erase either of your histories — everything you've each
         already kept stays exactly as it was, this just adds the shared space on top.</p>
       <div class="ip-acts">
@@ -997,7 +997,7 @@
       </div>
       <hr class="sep" style="margin:18px 0 14px">
       <!-- Reciprocal path, real gap (matches the homepage's own promise:
-           "if you're both already using Eravos on your own, connecting
+           "if you're both already using Perspect on your own, connecting
            doesn't erase either of your histories" -- nothing implemented
            that until redeemInviteCode() in eravos-kernel.js). This is for
            the case where THEY sent YOU a code -- generating one above and
@@ -1187,7 +1187,7 @@
   const TAB_IDS = ["cocreate", "vault", "settings", "sparring", "call", "chat", "voice", "admin", "console"];
   const SETTINGS_SUBTABS = ["system","features","ai","admin"];
 
-  // Every tab now lives in its own folder (Phase 0 of ERAVOS-SPEC-v1's
+  // Every tab now lives in its own folder (Phase 0 of PERSPECT-SPEC-v1's
   // phase map, completed). TAB_SPLIT_PATHS stays as the router's map from
   // tab id to folder path — kept even now that coverage is total, since
   // it's still the mechanism for adding new tabs/relational sub-tabs
@@ -1555,7 +1555,7 @@
       const el = document.getElementById('eravos-handshake-error');
       if (el) {
         el.style.display = 'block';
-        el.textContent = 'Eravos can\'t run by double-clicking this file directly.\n\n' +
+        el.textContent = 'Perspect can\'t run by double-clicking this file directly.\n\n' +
           'Browsers block the page from loading its own data (manifest.json, tabs, etc.) ' +
           'when opened as a file:// path — this is a browser security rule, not a bug here, ' +
           'and it applies no matter what the site is.\n\n' +
@@ -1609,7 +1609,7 @@
       const el = document.getElementById('eravos-handshake-error');
       if (el) {
         el.style.display = 'block';
-        el.textContent = 'Eravos could not start: ' + err.message +
+        el.textContent = 'Perspect could not start: ' + err.message +
           '\n\nThis is a static site — it needs to be served over HTTP (Apache, or any ' +
           'web server), not opened as a local file. If you\'re already serving it and ' +
           'still see this, check that manifest.json and the tabs/, config/, and shared/ ' +

@@ -382,13 +382,13 @@
     if (!r.invite) throw new Error('[pairing] emailInvite(): create an invite first');
     var who = fromName || 'Someone';
     var hours = Math.round((r.invite.expiresAt - this.now()) / 3600000);
-    var subject = who + ' invited you to Eravos';
+    var subject = who + ' invited you to Perspect';
     var body =
-      who + ' set up a shared space on Eravos and invited you into it.\n\n' +
+      who + ' set up a shared space on Perspect and invited you into it.\n\n' +
       'Open this link on your phone:\n' + this.inviteUrl() + '\n\n' +
       'Or enter this code in the app:\n    ' + r.invite.code + '\n\n' +
       'The link works once and expires in about ' + hours + ' hours.\n\n' +
-      'Eravos is private — it runs between your two devices. Nothing you write\n' +
+      'Perspect is private — it runs between your two devices. Nothing you write\n' +
       'there goes to a company, and there is no account to sign up for.\n';
     return {
       to: toAddress || '',
