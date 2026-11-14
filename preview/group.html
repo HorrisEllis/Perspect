@@ -1,0 +1,268 @@
+<!doctype html>
+<!-- PREVIEW ONLY — Perspect for a group (2026-11-14). A clickable look at the group UI, shown before anything is built.
+     Nothing here talks to the relay; the messages, members and events are made up to show the layout. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perspect — Group preview</title>
+<style>
+:root{
+  --bg:#060607; --rail:#0a0a0c; --side:#0d0d10; --main:#101014; --raise:#16161b; --hover:#1c1c22; --line:#22222a;
+  --text:#ece9e4; --dim:#8b8893; --faint:#5c5a63;
+  --fire:#ff6a00; --amber:#ffb347; --cyan:#00d4ff; --violet:#a77bff; --green:#3ddc84; --rose:#ff5c8a;
+  --r:10px; --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif; --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.app{display:grid;grid-template-columns:72px 248px 1fr 248px;height:100vh;overflow:hidden}
+
+/* ── rail: your groups and your two-person spaces ── */
+.rail{background:var(--rail);display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 0;border-right:1px solid var(--line)}
+.gi{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--raise);color:var(--dim);position:relative;transition:border-radius .15s,background .15s}
+.gi:hover{border-radius:12px;background:var(--hover);color:var(--text)}
+.gi.on{border-radius:12px;background:linear-gradient(135deg,var(--fire),var(--rose));color:#fff}
+.gi.on::before{content:"";position:absolute;left:-12px;width:4px;height:30px;border-radius:0 4px 4px 0;background:var(--text)}
+.gi .dot{position:absolute;right:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rose);color:#fff;font-size:10px;display:grid;place-items:center;border:3px solid var(--rail)}
+.rail hr{width:28px;border:0;border-top:1px solid var(--line);margin:4px 0}
+.gi.add{color:var(--green);font-size:22px;font-weight:400}
+
+/* ── side: channels ── */
+.side{background:var(--side);display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.ghead{padding:14px 14px 12px;border-bottom:1px solid var(--line)}
+.gname{font-weight:700;font-size:14px;line-height:1.25}
+.gsub{color:var(--dim);font-size:12px;margin-top:3px;display:flex;gap:8px;align-items:center}
+.gsub .live{color:var(--green)}
+.chs{flex:1;overflow:auto;padding:8px 8px 16px}
+.cat{display:flex;justify-content:space-between;align-items:center;color:var(--faint);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:14px 8px 4px}
+.ch{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:6px;color:var(--dim);text-align:left}
+.ch:hover{background:var(--hover);color:var(--text)}
+.ch.on{background:var(--raise);color:var(--text)}
+.ch .ic{width:18px;text-align:center;color:var(--faint);font-family:var(--mono)}
+.ch .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch .badge{font-size:10px;font-weight:700;background:var(--rose);color:#fff;border-radius:8px;padding:1px 6px}
+.ch.unread .n{color:var(--text);font-weight:600}
+.vc{margin:2px 0 6px 34px;display:flex;flex-direction:column;gap:4px}
+.vc span{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12.5px}
+.me{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--rail);border-top:1px solid var(--line)}
+.me .who{flex:1;min-width:0}.me .who b{display:block;font-size:13px}.me .who i{font-style:normal;color:var(--dim);font-size:11.5px}
+.me button{width:30px;height:30px;border-radius:6px;color:var(--dim)}.me button:hover{background:var(--hover);color:var(--text)}
+
+/* avatars: initials, colour by person */
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:#0b0b0d;flex:none;position:relative}
+.av.s{width:28px;height:28px;font-size:11px}
+.av .st{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;border:3px solid var(--side);background:var(--faint)}
+.av .st.on{background:var(--green)}.av .st.idle{background:var(--amber)}
+
+/* ── main: the conversation ── */
+.main{background:var(--main);display:flex;flex-direction:column;min-width:0}
+.top{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);flex:none}
+.top .t{font-weight:700;display:flex;gap:8px;align-items:center}.top .t .ic{color:var(--faint);font-family:var(--mono)}
+.top .d{color:var(--dim);font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:1px solid var(--line);padding-left:12px}
+.tb{display:flex;gap:4px}.tb button{height:32px;padding:0 10px;border-radius:6px;color:var(--dim);font-size:13px}.tb button:hover{background:var(--hover);color:var(--text)}
+.search{height:30px;width:170px;border-radius:6px;background:var(--bg);border:1px solid var(--line);color:var(--dim);padding:0 10px;font-size:12.5px;display:flex;align-items:center}
+.feed{flex:1;overflow:auto;padding:12px 0 8px}
+.pin{margin:4px 16px 12px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--fire);border-radius:var(--r);background:var(--raise)}
+.pin h3{margin:0 0 6px;font-size:15px}.pin p{margin:4px 0;color:var(--dim)}.pin .tag{font-size:11px;color:var(--amber);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.day{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:11.5px;font-weight:600;margin:14px 16px 6px}.day::before,.day::after{content:"";flex:1;border-top:1px solid var(--line)}
+.msg{display:flex;gap:12px;padding:6px 16px}.msg:hover{background:#13131a}
+.msg .body{min-width:0;flex:1}.msg .h{display:flex;gap:8px;align-items:baseline}.msg .h b{font-weight:600}.msg .h time{color:var(--faint);font-size:11.5px}
+.msg .h .role{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,106,0,.15);color:var(--fire)}
+.msg p{margin:2px 0 0;color:#d9d6d0}
+.msg.cont{padding-top:0}.msg.cont .av{visibility:hidden;height:0}
+.reacts{display:flex;gap:6px;margin-top:6px}.reacts span{font-size:12px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);background:var(--raise);color:var(--dim)}
+.reacts span.mine{border-color:var(--cyan);color:var(--cyan)}
+.thread{margin-top:6px;font-size:12.5px;color:var(--cyan)}
+
+/* cards that only Perspect has */
+.card{margin-top:8px;max-width:520px;border:1px solid var(--line);border-radius:var(--r);background:var(--raise);overflow:hidden}
+.card .ch2{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.card .cb{padding:12px 14px}.card .cb p{margin:0 0 8px;color:var(--dim)}
+.card .rules{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.card .rules span{font-size:12px;padding:3px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
+.card .row{display:flex;gap:8px;align-items:center}
+.btn{height:32px;padding:0 14px;border-radius:6px;font-weight:600;font-size:13px}
+.btn.p{background:var(--fire);color:#120800}.btn.p:hover{filter:brightness(1.1)}
+.btn.g{background:var(--hover);color:var(--text)}.btn.g:hover{background:#26262e}
+.timer{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber)}
+.spar .ch2{color:var(--amber)}.oneway .ch2{color:var(--violet)}.event .ch2{color:var(--cyan)}
+.oneway .cb{font-size:15px;color:var(--text);font-style:italic}
+.oneway .lock{font-size:12px;color:var(--faint);margin-top:8px}
+.event .when{font-size:15px;font-weight:700}.event .where{color:var(--dim);font-size:13px}.event .going{display:flex;align-items:center;gap:4px;margin-top:10px}
+
+/* composer */
+.compose{padding:0 16px 18px;flex:none}
+.modes{display:flex;gap:4px;margin-bottom:6px}
+.mode{font-size:12px;padding:4px 10px;border-radius:6px;color:var(--dim)}.mode:hover{background:var(--hover)}
+.mode.on{background:var(--raise);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+.box{display:flex;align-items:center;gap:8px;background:var(--raise);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px}
+.box:focus-within{border-color:#34343e}
+.box input{flex:1;background:none;border:0;outline:0;color:var(--text);font:inherit;padding:8px 4px}
+.box button{width:32px;height:32px;border-radius:6px;color:var(--dim);font-size:16px}.box button:hover{background:var(--hover);color:var(--text)}
+.hint{font-size:11.5px;color:var(--faint);margin-top:6px;min-height:16px}
+
+/* ── members ── */
+.mem{background:var(--side);border-left:1px solid var(--line);overflow:auto;padding:14px 10px}
+.mem h4{margin:12px 8px 6px;color:var(--faint);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.mrow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px}.mrow:hover{background:var(--hover)}
+.mrow .nm{font-size:13.5px}.mrow .nm small{display:block;color:var(--faint);font-size:11.5px}
+.mrow.off{opacity:.45}
+.about{margin:4px 8px 14px;padding:12px;border-radius:var(--r);background:var(--raise);border:1px solid var(--line);font-size:12.5px;color:var(--dim)}
+.about b{color:var(--text);display:block;margin-bottom:4px;font-size:13px}
+
+/* voice call bar (Perspect's call tools) */
+.callbar{display:none;align-items:center;gap:10px;margin:0 16px 10px;padding:10px 12px;border-radius:var(--r);background:#0b1a12;border:1px solid #1d3b2a}
+.callbar.on{display:flex}.callbar .lbl{flex:1;font-size:13px;color:var(--green)}
+.callbar button{height:30px;padding:0 10px;border-radius:6px;background:#12261a;color:var(--text);font-size:12.5px}.callbar button:hover{background:#18331f}
+.callbar .end{background:#3a1212;color:#ffb3b3}
+
+/* phone */
+@media (max-width:900px){.app{grid-template-columns:64px 1fr}.side,.mem{display:none}.app.chans .side{display:flex;position:fixed;inset:0 0 0 64px;z-index:5}.search{display:none}.top .d{display:none}}
+@media (max-width:1180px) and (min-width:901px){.app{grid-template-columns:72px 230px 1fr}.mem{display:none}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail" aria-label="Spaces">
+    <button class="gi" title="Direct — your two-person spaces">✉</button>
+    <hr>
+    <button class="gi on" title="Invention, Intention, Systems &amp; Outcasts">II<span class="dot">4</span></button>
+    <button class="gi" title="Another group">Λ</button>
+    <button class="gi add" title="Start a group">＋</button>
+  </nav>
+
+  <aside class="side">
+    <div class="ghead">
+      <div class="gname">Invention, Intention,<br>Systems &amp; Outcasts</div>
+      <div class="gsub">Oregon City · 7 members · <span class="live">● 3 here</span></div>
+    </div>
+    <div class="chs" id="chs"></div>
+    <div class="me">
+      <div class="av" style="background:#ff8a3d">H<span class="st on"></span></div>
+      <div class="who"><b>Horris</b><i>Organizer · here</i></div>
+      <button title="Microphone">🎙</button><button title="Settings">⚙</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <button class="tb" id="chanToggle" title="Channels" style="display:none">☰</button>
+      <div class="t"><span class="ic" id="tIc">#</span><span id="tName">start-here</span></div>
+      <div class="d" id="tDesc"></div>
+      <div class="search">Search</div>
+      <div class="tb"><button title="Pinned">📌</button><button title="Threads">🧵</button></div>
+    </header>
+    <div class="callbar" id="callbar">
+      <span class="lbl" id="callLbl">🔊 Workshop — you, Maya, Theo</span>
+      <button title="Hear the last 15 seconds again">⟲ Replay 15 s</button>
+      <button title="Clearer speech: gate, presence, gain">◎ Clarity</button>
+      <button title="Live captions, on your device">CC</button>
+      <button class="end" id="endCall">Leave</button>
+    </div>
+    <div class="feed" id="feed"></div>
+    <div class="compose">
+      <div class="modes" id="modes">
+        <button class="mode on" data-m="msg">Message</button>
+        <button class="mode" data-m="oneway" title="Arrives with space: no reply for 10 minutes">One-way</button>
+        <button class="mode" data-m="spar" title="Timed turns, rules you both accept">⚔ Spar</button>
+        <button class="mode" data-m="idea" title="A half-built idea others can build on">✦ Idea</button>
+      </div>
+      <div class="box">
+        <button title="Attach">＋</button>
+        <input id="inp" placeholder="Message #start-here" autocomplete="off">
+        <button title="Emoji">☺</button><button id="send" title="Send">➤</button>
+      </div>
+      <div class="hint" id="hint">Enter to send · Shift+Enter for a new line</div>
+    </div>
+  </main>
+
+  <aside class="mem" id="mem"></aside>
+</div>
+
+<script>
+const P = {
+  H: { n: 'Horris', c: '#ff8a3d', st: 'on', role: 'Organizer' },
+  M: { n: 'Maya', c: '#7fd3ff', st: 'on', note: 'systems · psychology' },
+  T: { n: 'Theo', c: '#b79bff', st: 'on', note: 'hardware tinkerer' },
+  A: { n: 'Ava', c: '#ffd166', st: 'idle', note: 'philosophy' },
+  R: { n: 'Rafe', c: '#6ee7a8', st: 'off', note: 'AI · software' },
+  J: { n: 'Jun', c: '#ff8fb1', st: 'off', note: 'music · sound' },
+  S: { n: 'Sol', c: '#9ad0c2', st: 'off', note: 'new here' },
+};
+const av = (k, s) => `<div class="av ${s || ''}" style="background:${P[k].c}">${P[k].n[0]}<span class="st ${P[k].st}"></span></div>`;
+const CH = [
+  ['WELCOME', [['#', 'start-here', 'What this group is, and how it works'], ['#', 'introductions', 'Who you are and what you are making', 2]]],
+  ['THINKING', [['#', 'ideas', 'Half-formed is welcome'], ['#', 'systems', 'How things work, all the way down', 1], ['#', 'philosophy', 'Honest disagreement over empty agreement']]],
+  ['MAKING', [['#', 'inventions', 'What you are building'], ['#', 'show-and-tell', 'Bring the half-built thing'], ['✦', 'co-create', 'One idea, many hands']]],
+  ['SPARRING', [['⚔', 'spar-arena', 'Timed turns. First thought, best thought.', 1]]],
+  ['MEETUPS', [['◷', 'events', 'Oregon City, and online']]],
+  ['VOICE', [['🔊', 'Workshop', 'voice', 0, ['M', 'T']], ['🔊', 'Lounge', 'voice']]],
+];
+const FEEDS = {
+  'start-here': () => `
+    <div class="pin"><div class="tag">📌 Pinned · Organizer</div><h3>Welcome to Invention, Intention, Systems &amp; Outcasts</h3>
+      <p>What if the people who never quite fit the mold were the ones building what comes next?</p>
+      <p>Curiosity over credentials. Collaboration over competition. Honest disagreement over empty agreement. Meaningful creation over convention.</p>
+      <p><b style="color:var(--text)">You don't have to think like everyone else to belong here.</b></p></div>
+    <div class="day">Today</div>
+    ${m('H', '9:02 AM', 'Hey all, a few of you joined this week. Drop a line in #introductions: who you are and the thing you can\'t stop thinking about.', { role: 1, reacts: [['👋', 5, 1], ['🔥', 3]] })}
+    ${m('M', '9:15 AM', 'Hi! I map how systems fail: org charts, ecosystems, my own habits. Excited to find people who think like this.', { reacts: [['💡', 2]] })}
+    ${m('T', '9:31 AM', 'Theo. I build odd machines out of salvage. Currently: a plotter that draws with sand.', { thread: '4 replies' })}
+    ${m('H', '10:04 AM', 'First meetup is up. Come build something half-finished with us.', { role: 1, card: evt() })}`,
+  'spar-arena': () => `
+    <div class="pin"><div class="tag">⚔ How sparring works</div><p>Two people, timed turns, rules both accept. Stop typing for 5 seconds in speed mode and you lose the turn. Everyone else watches and reacts after.</p></div>
+    <div class="day">Live now</div>
+    ${m('M', '10:40 AM', 'Anyone want to spar on this: <i>"Systems thinking makes people worse at acting."</i>', { card: spar() })}
+    ${m('A', '10:41 AM', 'I\'ll take the other side. Accepting.', { reacts: [['⚔', 4]] })}`,
+  'co-create': () => `
+    <div class="day">Today</div>
+    ${m('T', '8:12 AM', 'Idea: a shared map of every tool any of us has built, wired together like a canvas. Who adds the next piece?', { card: `<div class="card"><div class="ch2" style="color:var(--green)">✦ Idea · open to build on</div><div class="cb"><p>Sand plotter → Maya\'s failure maps → ?</p><div class="row"><button class="btn p">Add the next piece</button><button class="btn g">Fork it</button></div></div></div>` })}`,
+  'events': () => `<div class="day">Upcoming</div>${m('H', 'Mon', 'Second Saturday build session.', { role: 1, card: evt() })}`,
+};
+function evt() { return `<div class="card event"><div class="ch2">◷ Meetup</div><div class="cb"><div class="when">Sat, Nov 22 · 2:00 PM</div><div class="where">Oregon City Library, Community Room · and on voice</div>
+  <div class="going">${av('H', 's')}${av('M', 's')}${av('T', 's')}${av('A', 's')}<span style="color:var(--dim);font-size:12.5px;margin-left:6px">4 going</span></div>
+  <div class="row" style="margin-top:10px"><button class="btn p">Going</button><button class="btn g">Maybe</button></div></div></div>`; }
+function spar() { return `<div class="card spar"><div class="ch2">⚔ Spar · Maya vs Ava</div><div class="cb"><div class="row" style="justify-content:space-between"><span>Turn 3 of 10 · Ava's turn</span><span class="timer" id="tmr">0:24</span></div>
+  <div class="rules"><span>📜 No examples from work</span><span>📜 One sentence per turn</span></div>
+  <div class="row"><button class="btn g">Watch</button><button class="btn g">Propose a rule</button></div></div></div>`; }
+function m(k, t, text, o) { o = o || {}; const r = (o.reacts || []).map(([e, n, me]) => `<span class="${me ? 'mine' : ''}">${e} ${n}</span>`).join('');
+  return `<div class="msg">${av(k)}<div class="body"><div class="h"><b style="color:${P[k].c}">${P[k].n}</b>${o.role ? '<span class="role">ORGANIZER</span>' : ''}<time>${t}</time></div><p>${text}</p>${o.card || ''}${r ? `<div class="reacts">${r}</div>` : ''}${o.thread ? `<div class="thread">🧵 ${o.thread}</div>` : ''}</div></div>`; }
+const esc = (s) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let cur = 'start-here', mode = 'msg';
+function renderChannels() {
+  document.getElementById('chs').innerHTML = CH.map(([cat, list]) => `<div class="cat"><span>${cat}</span><span>＋</span></div>` + list.map(([ic, n, d, b, inv]) =>
+    `<button class="ch ${n === cur ? 'on' : ''} ${b ? 'unread' : ''}" data-n="${n}" data-d="${d}" data-ic="${ic}"><span class="ic">${ic}</span><span class="n">${n}</span>${b ? `<span class="badge">${b}</span>` : ''}</button>` +
+    (inv ? `<div class="vc">${inv.map(k => `<span>${av(k, 's')}${P[k].n}</span>`).join('')}</div>` : '')).join('')).join('');
+}
+function open(n, d, ic) {
+  if (d === 'voice') { const bar = document.getElementById('callbar'); bar.classList.add('on'); document.getElementById('callLbl').textContent = '🔊 ' + n + ' — you, Maya, Theo'; return; }
+  cur = n; renderChannels(); document.getElementById('tName').textContent = n; document.getElementById('tIc').textContent = ic; document.getElementById('tDesc').textContent = d;
+  document.getElementById('inp').placeholder = 'Message ' + (ic === '#' ? '#' : '') + n;
+  document.getElementById('feed').innerHTML = (FEEDS[n] || (() => `<div class="pin"><div class="tag">${ic} ${n}</div><p>${d}</p></div><div class="day">Today</div>${m('R', '11:20 AM', 'First post here. Who else is thinking about this?')}`))();
+  const f = document.getElementById('feed'); f.scrollTop = f.scrollHeight; document.getElementById('app').classList.remove('chans');
+}
+function renderMembers() {
+  const on = Object.keys(P).filter(k => P[k].st !== 'off'), off = Object.keys(P).filter(k => P[k].st === 'off');
+  const row = (k) => `<div class="mrow ${P[k].st === 'off' ? 'off' : ''}">${av(k, 's')}<div class="nm">${P[k].n}<small>${P[k].role || P[k].note}</small></div></div>`;
+  document.getElementById('mem').innerHTML = `<div class="about"><b>About</b>Unconventional thinkers, self-taught inventors, systems thinkers. Private: messages are end to end encrypted, on our own server.</div>
+    <h4>Organizer — 1</h4>${row('H')}<h4>Here — ${on.length - 1}</h4>${on.filter(k => k !== 'H').map(row).join('')}<h4>Away — ${off.length}</h4>${off.map(row).join('')}`;
+}
+const HINTS = { msg: 'Enter to send · Shift+Enter for a new line', oneway: 'One-way: it arrives with space. They read it, and can reply in 10 minutes.', spar: 'Spar: pick who, the timer and the rules. Everyone can watch.', idea: 'Idea: others can add the next piece or fork it. Each piece keeps its author.' };
+document.getElementById('chs').addEventListener('click', e => { const b = e.target.closest('.ch'); if (b) open(b.dataset.n, b.dataset.d, b.dataset.ic); });
+document.getElementById('modes').addEventListener('click', e => { const b = e.target.closest('.mode'); if (!b) return; mode = b.dataset.m;
+  document.querySelectorAll('.mode').forEach(x => x.classList.toggle('on', x === b)); document.getElementById('hint').textContent = HINTS[mode]; });
+document.getElementById('endCall').onclick = () => document.getElementById('callbar').classList.remove('on');
+function send() { const i = document.getElementById('inp'), v = i.value.trim(); if (!v) return; i.value = '';
+  const f = document.getElementById('feed'), t = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), body = esc(v);
+  f.insertAdjacentHTML('beforeend', mode === 'oneway' ? m('H', t, '', { card: `<div class="card oneway"><div class="ch2">✉ One-way</div><div class="cb">${body}<div class="lock">Replies open in 10:00 · this is for receiving, not reacting</div></div></div>` })
+    : mode === 'idea' ? m('H', t, '', { card: `<div class="card"><div class="ch2" style="color:var(--green)">✦ Idea · open to build on</div><div class="cb"><p>${body}</p><div class="row"><button class="btn p">Add the next piece</button></div></div></div>` })
+    : m('H', t, body, { role: 1 })); f.scrollTop = f.scrollHeight; }
+document.getElementById('send').onclick = send;
+document.getElementById('inp').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+document.getElementById('chanToggle').onclick = () => document.getElementById('app').classList.toggle('chans');
+if (matchMedia('(max-width:900px)').matches) document.getElementById('chanToggle').style.display = '';
+let secs = 24; setInterval(() => { const el = document.getElementById('tmr'); if (!el) return; secs = secs > 0 ? secs - 1 : 30; el.textContent = '0:' + String(secs).padStart(2, '0'); }, 1000);
+renderChannels(); renderMembers(); open('start-here', 'What this group is, and how it works', '#');
+</script>
+</body>
+</html>
