@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perspect — Profile (preview)</title><link rel="stylesheet" href="../../group/web/kit.css"><style>.feed{flex:1;overflow:auto;padding:10px 0}.msg{display:flex;gap:12px;padding:5px 16px;position:relative}.msg:hover{background:#13131a}.msg .body{flex:1;min-width:0}
+.msg .h{display:flex;gap:8px;align-items:baseline}.msg .h time{color:var(--faint);font-size:11.5px}.msg p{margin:2px 0 0;color:#d9d6d0}.role{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,106,0,.15);color:var(--fire)}
+.reacts{display:flex;gap:6px;margin-top:6px}.reacts span{font-size:12px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);background:var(--raise);color:var(--dim)}.reacts span.mine{border-color:var(--cyan);color:var(--cyan)}
+.kcard{margin-top:6px;max-width:560px}.sec{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 16px;flex:none;overflow:auto}
+.tab{padding:10px 12px;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}.tab.on{color:var(--text);border-color:var(--fire)}
+.set{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}.set:last-child{border:0}.set small{display:block;color:var(--faint);font-size:12px}
+.tg{width:38px;height:22px;border-radius:11px;background:var(--hover);position:relative;flex:none}.tg::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--dim)}
+.tg.on{background:var(--fire)}.tg.on::after{left:19px;background:#fff}select.in{width:auto}.new{font-size:10px;color:var(--amber);margin-left:6px}.hero{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--raise)}.hero .banner{height:130px;background:linear-gradient(135deg,#ff8a3d,#ff5c8a 60%,#16161b)}.hero .bd{padding:0 22px 20px}.hero .moodwrap{margin-top:-80px}.hero .av{width:110px;height:110px;font-size:40px;border:6px solid var(--raise)}.hero .bubble{font-size:14px;padding:8px 14px;max-width:260px}.stat{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--raise)}.stat b{font-size:20px;display:block}</style></head><body>
+<div class="app " id="app"><nav class="rail" id="rail"></nav><aside class="side" id="side"></aside>
+<main class="main" style="position:relative"><header class="top"><div class="t"><span class="ic">☺</span><span>Horris</span></div><div class="d">Profile</div></header>
+<div class="scroll"><div class="pad" style="max-width:900px">
+  <div class="hero"><div class="banner"></div><div class="bd"><div data-u="h" class="bigmood"></div>
+   <div class="row" style="justify-content:space-between;margin-top:6px"><div><h2 style="margin:0">Horris</h2><div class="muted">Owner · inventor · systems</div></div>
+   <div class="row"><a class="btn g" href="settings/profile.html">Edit profile</a></div></div>
+   <p style="margin:14px 0 0;max-width:620px">I build tools for thinking: ERAVOS, Emerge, Perspect. Ask me about sand.</p></div></div>
+  <div class="sec">Together</div><div class="row"><div class="stat"><b>14</b><span class="muted">spars</span></div><div class="stat"><b>9</b><span class="muted">ideas built on</span></div><div class="stat"><b>23</b><span class="muted">appreciations</span></div><div class="stat"><b>6</b><span class="muted">friends</span></div></div>
+  <div class="sec">Recent appreciations</div><div class="card"><div class="bd"><b style="color:#7fd3ff">Maya</b> <span class="faint">· 2h</span><br>For running the first meetup.</div></div>
+  <div class="sec">Ideas started</div><div class="card"><div class="bd">Wire the sand plotter into the ERAVOS canvas · <a href="idea.html">3 pieces</a></div></div>
+  </div></div></main></div>
+<script src="mock.js"></script><script>const { M, av, esc } = MOCK; MOCK.shell('profile', ''); document.querySelectorAll('.avslot').forEach(e => e.outerHTML = av(e.dataset.u)); document.querySelectorAll('.moodslot').forEach(e => e.outerHTML = MOCK.moodAv(e.dataset.u, 1));document.querySelectorAll('.bigmood').forEach(e => e.outerHTML = MOCK.moodAv(e.dataset.u));
+document.body.insertAdjacentHTML('beforeend', MOCK.note('The mood sits over the picture as a bubble. Editing is in Settings › Profile.'));</script></body></html>
