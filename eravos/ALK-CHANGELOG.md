@@ -1691,7 +1691,7 @@ not a default.
 2. she opens the link the FULL link carries the peer id
    bare 8-char code   REFUSED — it cannot pair on its own
 3. she registers      requested — paired? false
-4. his device gets it from Anjali
+4. his device gets it from Alex
 5. he confirms        paired  ·  code now spent
 ```
 

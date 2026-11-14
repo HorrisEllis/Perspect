@@ -21,7 +21,7 @@ function rig({ shareTab = true, typing = false } = {}) {
     chat, send: (t, d) => { sent.push({ t, d }); return true; },
     switchTab: id => switched.push(id),
     tabLabel: id => id.charAt(0).toUpperCase() + id.slice(1),
-    partnerName: () => 'Anjali',
+    partnerName: () => 'Alex',
   });
   return { p, chat, sent, switched, store };
 }
@@ -30,10 +30,10 @@ let pass=0,fail=0;
 const t=(n,f)=>{try{f();console.log('  ok  - '+n);pass++}catch(e){console.log('  FAIL- '+n+'\n        '+e.message);fail++}};
 
 console.log('\npresence — the shell line');
-t('"Anjali is in the Vault" — the whole point of this phase', () => {
+t('"Alex is in the Vault" — the whole point of this phase', () => {
   const { p } = rig();
   p.theyEnteredTab('vault');
-  assert.strictEqual(p.state().line, 'Anjali is in Vault');
+  assert.strictEqual(p.state().line, 'Alex is in Vault');
   assert.strictEqual(p.state().theirTab, 'vault');
 });
 t('presence goes stale rather than hanging forever', () => {

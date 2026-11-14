@@ -74,26 +74,26 @@ t('role and isAdmin can never disagree (two fields, one fact)', () => {
 console.log('\nrename — SAME person, data follows');
 t('every data key moves with them', () => {
   const s=seeded(), e=new AdminEngine(s);
-  const r=e.renameUser('raven','anjali','Anjali');
+  const r=e.renameUser('raven','alex','Alex');
   assert.strictEqual(r.keysMoved.length,5);
-  assert.deepStrictEqual(s.get('anjali_vault'),['a','b']);
+  assert.deepStrictEqual(s.get('alex_vault'),['a','b']);
   assert.strictEqual(s.get('raven_vault',null),null,'old key must be gone, not duplicated');
-  assert.strictEqual(s.get('eravors_users').anjali.name,'Anjali');
+  assert.strictEqual(s.get('eravors_users').alex.name,'Alex');
   assert.strictEqual(s.get('eravors_users').raven,undefined);
 });
 t('peer identity and crypto keys are PRESERVED — same party to the connection', () => {
   const s=seeded(), e=new AdminEngine(s);
-  const r=e.renameUser('raven','anjali','Anjali');
+  const r=e.renameUser('raven','alex','Alex');
   assert.strictEqual(r.peerIdPreserved,'p-raven');
   assert.strictEqual(r.cryptoIdentityPreserved,true);
   assert.strictEqual(s.get('eravors_identity_priv'),'secret');
 });
 t('active user pointer follows the rename', () => {
-  const s=seeded(); new AdminEngine(s).renameUser('raven','anjali','Anjali');
-  assert.strictEqual(s.get('eravors_active_user_key'),'anjali');
+  const s=seeded(); new AdminEngine(s).renameUser('raven','alex','Alex');
+  assert.strictEqual(s.get('eravors_active_user_key'),'alex');
 });
 t('§0.3 a snapshot is returned whether or not it was asked for', () => {
-  const r=new AdminEngine(seeded()).renameUser('raven','anjali','Anjali');
+  const r=new AdminEngine(seeded()).renameUser('raven','alex','Alex');
   assert.ok(r.snapshot && r.snapshot.keyCount===5);
 });
 t('rejects a malformed key and an existing key, naming why', () => {
@@ -101,44 +101,44 @@ t('rejects a malformed key and an existing key, naming why', () => {
   assert.throws(()=>new AdminEngine(seeded()).renameUser('raven','james'), /already exists/);
 });
 t('the other person is untouched', () => {
-  const s=seeded(); new AdminEngine(s).renameUser('raven','anjali','Anjali');
+  const s=seeded(); new AdminEngine(s).renameUser('raven','alex','Alex');
   assert.deepStrictEqual(s.get('james_vault'),['j']);
 });
 
 console.log('\nreplace — DIFFERENT person, data does NOT follow');
 t('§1.2 disposition has NO default — it must be chosen explicitly', () => {
-  assert.throws(()=>new AdminEngine(seeded()).replacePartner('raven',{key:'anjali'},{}), /no default/i);
-  assert.throws(()=>new AdminEngine(seeded()).replacePartner('raven',{key:'anjali'},{disposition:'maybe'}), /archive.*purge/);
+  assert.throws(()=>new AdminEngine(seeded()).replacePartner('raven',{key:'alex'},{}), /no default/i);
+  assert.throws(()=>new AdminEngine(seeded()).replacePartner('raven',{key:'alex'},{disposition:'maybe'}), /archive.*purge/);
 });
 t('the outgoing person\'s data does NOT transfer to the new namespace', () => {
   const s=seeded(), e=new AdminEngine(s);
-  e.replacePartner('raven',{key:'anjali',name:'Anjali',password:'x'},{disposition:'archive'});
-  assert.strictEqual(s.get('anjali_vault',null),null,'a new person must NOT inherit logged feelings');
+  e.replacePartner('raven',{key:'alex',name:'Alex',password:'x'},{disposition:'archive'});
+  assert.strictEqual(s.get('alex_vault',null),null,'a new person must NOT inherit logged feelings');
   assert.strictEqual(s.get('raven_vault',null),null,'and the old key is vacated');
 });
 t('archive keeps it recoverable; purge does not', () => {
   const s1=seeded();
-  new AdminEngine(s1).replacePartner('raven',{key:'anjali',password:'x'},{disposition:'archive'});
+  new AdminEngine(s1).replacePartner('raven',{key:'alex',password:'x'},{disposition:'archive'});
   assert.ok(s1.keys().some(k=>k.includes('archive_raven')&&k.endsWith('raven_vault')));
   const s2=seeded();
-  new AdminEngine(s2).replacePartner('raven',{key:'anjali',password:'x'},{disposition:'purge'});
+  new AdminEngine(s2).replacePartner('raven',{key:'alex',password:'x'},{disposition:'purge'});
   assert.ok(!s2.keys().some(k=>k.includes('archive_raven')));
   assert.ok(!s2.keys().some(k=>k.startsWith('raven_')));
 });
 t('§17.5 a new peer identity is ISSUED, never inherited', () => {
   const s=seeded(), e=new AdminEngine(s);
-  const r=e.replacePartner('raven',{key:'anjali',password:'x'},{disposition:'purge'});
+  const r=e.replacePartner('raven',{key:'alex',password:'x'},{disposition:'purge'});
   assert.notStrictEqual(r.incoming.peerId,'p-raven');
   assert.strictEqual(r.cryptoIdentityRegenerated,true);
   assert.strictEqual(s.get('eravors_identity_priv',null),null,'old crypto identity must be gone');
 });
 t('the admin counterpart is repointed at the new peer', () => {
   const s=seeded(), e=new AdminEngine(s);
-  const r=e.replacePartner('raven',{key:'anjali',password:'x'},{disposition:'purge'});
+  const r=e.replacePartner('raven',{key:'alex',password:'x'},{disposition:'purge'});
   assert.strictEqual(s.get('eravors_users').james.partnerId,r.incoming.peerId);
 });
 t('the pair is torn down as part of the replacement', () => {
-  const s=seeded(); new AdminEngine(s).replacePartner('raven',{key:'anjali',password:'x'},{disposition:'purge'});
+  const s=seeded(); new AdminEngine(s).replacePartner('raven',{key:'alex',password:'x'},{disposition:'purge'});
   assert.strictEqual(s.get('eravors_partner_feeling_latest',null),null);
   assert.strictEqual(s.get('eravors_pipeline_code',null),null);
 });
@@ -146,7 +146,7 @@ t('refuses to replace the admin account', () => {
   assert.throws(()=>new AdminEngine(seeded()).replacePartner('james',{key:'someone',password:'p'},{disposition:'purge'}), /refusing to replace the admin/);
 });
 t('james keeps his own data through a replacement', () => {
-  const s=seeded(); new AdminEngine(s).replacePartner('raven',{key:'anjali',password:'x'},{disposition:'purge'});
+  const s=seeded(); new AdminEngine(s).replacePartner('raven',{key:'alex',password:'x'},{disposition:'purge'});
   assert.deepStrictEqual(s.get('james_vault'),['j']);
 });
 
@@ -206,16 +206,16 @@ t('refuses to operate with no storage at all rather than pretending', () => {
   if (orig) globalThis.DB=orig;
 });
 
-console.log('\nTHE ACTUAL JOB — replace Raven with Anjali, end to end');
-t('full sequence leaves exactly one partner named Anjali, with no Raven residue', () => {
+console.log('\nTHE ACTUAL JOB — replace Raven with Alex, end to end');
+t('full sequence leaves exactly one partner named Alex, with no Raven residue', () => {
   const s=seeded(), e=new AdminEngine(s);
   e.purgeThemes();
-  const r=e.replacePartner('raven',{key:'anjali',name:'Anjali',password:'newpass'},{disposition:'archive'});
+  const r=e.replacePartner('raven',{key:'alex',name:'Alex',password:'newpass'},{disposition:'archive'});
   const users=e.users();
   assert.strictEqual(users.length,2);
-  assert.ok(users.some(u=>u.key==='anjali'&&u.name==='Anjali'&&u.role==='partner'));
+  assert.ok(users.some(u=>u.key==='alex'&&u.name==='Alex'&&u.role==='partner'));
   assert.ok(!users.some(u=>u.key==='raven'));
-  assert.strictEqual(s.get('anjali_vault',null),null,'Anjali starts with her own empty namespace');
+  assert.strictEqual(s.get('alex_vault',null),null,'Alex starts with her own empty namespace');
   assert.ok(r.snapshot.keyCount>0,'Raven\'s data was exported before anything moved');
   assert.strictEqual(e.health().status,'healthy');
 });

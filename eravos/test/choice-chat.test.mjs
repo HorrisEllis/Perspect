@@ -167,8 +167,8 @@ t('all seven declared attachment kinds are accepted', () => {
 });
 t('receive appends, and a duplicate replay is ignored without error', () => {
   const {e}=mkChat();
-  e.receive({id:'x1',text:'here'},'Anjali');
-  e.receive({id:'x1',text:'here'},'Anjali');
+  e.receive({id:'x1',text:'here'},'Alex');
+  e.receive({id:'x1',text:'here'},'Alex');
   assert.strictEqual(e.thread().length,1,'outbox replay must not duplicate');
 });
 t('unreadCount counts only their unread', () => {

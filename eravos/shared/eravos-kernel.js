@@ -1062,18 +1062,6 @@ async function importFullBackup(input) {
   if (!Object.keys(existing).length && DB.get('eravors_reg_enabled', null) === null) DB.set('eravors_reg_enabled', true);
 })();
 
-// ── PARTNER SLOT — seeded ONCE, same "only if none exists" rule as above ──
-// A real second account, requested directly (name: Anjali) rather than
-// created through the register form, so it exists to log into right away.
-// Hash pre-computed (SHA-256 of the real password), same convention as the
-// james/raven seed above — the plaintext never sits in this file. This
-// creates the ACCOUNT only. It deliberately does NOT fabricate a "paired"
-// entry in eravos-pairing.js's own state — that would be exactly the
-// falsified-connection anti-pattern this file's own history (see comment
-// above) already found and removed once. Two accounts existing is not the
-// same claim as two accounts having actually completed the QR handshake;
-// that still happens for real, from the login screen or Settings ▸ Invite
-// Partner, the same as it would for anyone else.
 // (the seeded partner account is gone: a partner joins by invite or QR, shared/eravos-pairing.js)
 
 
@@ -1260,7 +1248,7 @@ function showHomepage(){
  *
  * So: the DESKTOP app opens on the login card. The WEB page keeps the
  * landing, because that is where the pitch is actually load-bearing — it is
- * the page Anjali lands on from a QR code, and the page she downloads from.
+ * the page Alex lands on from a QR code, and the page she downloads from.
  * "← Back" still reaches the landing in both, so nothing is unreachable.
  *
  * window.eravosDesktop exists only when electron-preload.js ran, which makes

@@ -76,15 +76,15 @@ t('registering with an invite creates a REQUEST, not a pairing', () => {
   const james = new Pairing({ store: mk(), origin: 'https://anonymousservers.info' });
   const inv = james.createInvite({ peerId: 'eravos-9x4kd02m' });
   const her = new Pairing({ store: mk(), origin: 'https://anonymousservers.info' });
-  const r = her.scan(Pairing.parse(inv.url), { peerId: 'eravos-7ba1qq83', name: 'Anjali' });
+  const r = her.scan(Pairing.parse(inv.url), { peerId: 'eravos-7ba1qq83', name: 'Alex' });
   assert.strictEqual(r.state, 'requested');
   assert.strictEqual(her.state().paired, false, 'creating an account must not pair her unilaterally');
 });
 t('his confirm is what pairs, and the code is then spent', () => {
   const james = new Pairing({ store: mk(), origin: 'https://anonymousservers.info' });
   const inv = james.createInvite({ peerId: 'eravos-9x4kd02m' });
-  assert.strictEqual(james.receiveRequest({ code: inv.code, myPeerId: 'eravos-7ba1qq83', myName: 'Anjali' }).ok, true);
-  assert.strictEqual(james.confirm({ name: 'Anjali' }).state, 'paired');
+  assert.strictEqual(james.receiveRequest({ code: inv.code, myPeerId: 'eravos-7ba1qq83', myName: 'Alex' }).ok, true);
+  assert.strictEqual(james.confirm({ name: 'Alex' }).state, 'paired');
   assert.strictEqual(james.receiveRequest({ code: inv.code, myPeerId: 'x' }).ok, false, 'single use');
 });
 t('doRegister sets role=partner when there is a pending invite', () => {
@@ -94,7 +94,7 @@ t('doRegister sets role=partner when there is a pending invite', () => {
 });
 t('no account is built in: no seeded names, no password hashes in the source', () => {
   assert.ok(!/Hash\s*=\s*'[0-9a-f]{64}'/.test(kernel), 'a password hash is in the source');
-  assert.ok(!/existing\[\s*'(james|raven|anjali)'\s*\]/.test(kernel), 'a named account is seeded');
+  assert.ok(!/existing\[\s*'(james|raven|alex)'\s*\]/.test(kernel), 'a named account is seeded');
 });
 t('a fresh install opens registration, and its first account is the admin', () => {
   assert.ok(/if \(!Object\.keys\(existing\)\.length && DB\.get\('eravors_reg_enabled', null\) === null\) DB\.set\('eravors_reg_enabled', true\)/.test(kernel));

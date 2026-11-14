@@ -15,7 +15,7 @@ const rig = (o={}) => new Pairing({ store: o.store || mkStore(), now: () => CLOC
 // which turned out to be a REAL leak, not a fixture artifact: the app was
 // minting `eravos-james-fixed`, so every pairing code announced who made it.
 const ME  = { peerId: 'eravos-9x4kd02m', pubFingerprint: 'fp-a91c', accountKey: 'james' };
-const HER = { peerId: 'eravos-7ba1qq83', name: 'Anjali', accountKey: 'anjali' };
+const HER = { peerId: 'eravos-7ba1qq83', name: 'Alex', accountKey: 'alex' };
 
 let pass=0,fail=0;
 const t=(n,f)=>{try{CLOCK=1_700_000_000_000;f();console.log('  ok  - '+n);pass++}catch(e){console.log('  FAIL- '+n+'\n        '+e.message);fail++}};
@@ -42,8 +42,8 @@ t('"riding solo" and "skip" are both permanent, and which was chosen is kept', (
 });
 t('an already-paired install is never prompted', () => {
   const p = rig();
-  p.createInvite(ME); p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Anjali' });
-  p.confirm({ name: 'Anjali' });
+  p.createInvite(ME); p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Alex' });
+  p.confirm({ name: 'Alex' });
   assert.strictEqual(p.shouldPromptInvite(), false);
 });
 
@@ -69,7 +69,7 @@ t('the payload carries NOTHING about the person', () => {
   p.createInvite({ ...ME, relay: 'wss://anonymousservers.info/relay' });
   const pl = p.invitePayload();
   const json = JSON.stringify(pl).toLowerCase();
-  ['james','anjali','password','lovergirl','name'].forEach(w =>
+  ['james','alex','password','lovergirl','name'].forEach(w =>
     assert.ok(!json.includes(w), 'payload leaks "' + w + '": ' + json));
   assert.deepStrictEqual(Object.keys(pl).sort(), ['code','exp','fp','n','peer','r','v']);
   assert.strictEqual(pl.v, 2, 'a payload carrying a rendezvous is v2');
@@ -122,18 +122,18 @@ t('SCANNING DOES NOT PAIR — it creates a request the other side confirms', () 
 t('confirm() is what pairs, and only with a pending request', () => {
   const p = rig();
   p.createInvite(ME);
-  assert.throws(() => p.confirm({ name: 'Anjali' }), /nothing to confirm/);
-  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Anjali' });
-  const c = p.confirm({ name: 'Anjali' });
+  assert.throws(() => p.confirm({ name: 'Alex' }), /nothing to confirm/);
+  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Alex' });
+  const c = p.confirm({ name: 'Alex' });
   assert.strictEqual(c.state, 'paired');
-  assert.strictEqual(p.state().partner.name, 'Anjali');
+  assert.strictEqual(p.state().partner.name, 'Alex');
 });
 t('a code is SINGLE-USE — a second request on a used code is refused', () => {
   const p = rig();
   p.createInvite(ME);
   const code = p.state().invite.code;
-  p.receiveRequest({ code, myPeerId: HER.peerId, myName: 'Anjali' });
-  p.confirm({ name: 'Anjali' });
+  p.receiveRequest({ code, myPeerId: HER.peerId, myName: 'Alex' });
+  p.confirm({ name: 'Alex' });
   const second = rig({ store: p.store });
   assert.strictEqual(second.receiveRequest({ code, myPeerId: 'peer-someone' }).ok, false);
 });
@@ -155,18 +155,18 @@ t('declining is an answer — the code survives unless revoked', () => {
 t('you cannot mint a new invite while paired', () => {
   const p = rig();
   p.createInvite(ME);
-  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Anjali' });
-  p.confirm({ name: 'Anjali' });
+  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Alex' });
+  p.confirm({ name: 'Alex' });
   assert.throws(() => p.createInvite(ME), /already paired/);
 });
 t('unpair is unilateral — nobody needs permission to be solo', () => {
   const p = rig();
   p.createInvite(ME);
-  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Anjali' });
-  p.confirm({ name: 'Anjali' });
+  p.receiveRequest({ code: p.state().invite.code, myPeerId: HER.peerId, myName: 'Alex' });
+  p.confirm({ name: 'Alex' });
   const u = p.unpair();
   assert.strictEqual(u.state, 'solo');
-  assert.strictEqual(u.formerPartner, 'Anjali');
+  assert.strictEqual(u.formerPartner, 'Alex');
   assert.strictEqual(p.state().partner, null);
 });
 
@@ -174,7 +174,7 @@ console.log('\npairing — email invite');
 t('the email is composed locally — mailto only, no sending service', () => {
   const p = rig();
   p.createInvite(ME);
-  const e = p.emailInvite('anjali@example.com', 'James');
+  const e = p.emailInvite('alex@example.com', 'James');
   assert.ok(e.mailto.startsWith('mailto:'));
   assert.ok(e.body.includes(p.state().invite.code));
   assert.ok(e.body.includes('https://eravos.test/#pair='));

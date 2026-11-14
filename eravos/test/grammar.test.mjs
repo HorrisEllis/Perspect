@@ -146,12 +146,12 @@ console.log('\ngrammar — the thing it deliberately does not do (§1.1)');
 // the half that still matters.
 const CORPUS=[
  {text:'we keep circling the same thing',speaker:'james'},
- {text:'I think we keep circling the same thing again',speaker:'anjali'},
+ {text:'I think we keep circling the same thing again',speaker:'alex'},
  {text:'the meeting is at 3pm tomorrow',speaker:'james'},
  {text:'honestly we keep circling the same thing',speaker:'james'},
- {text:'the quiet thing happened again',speaker:'anjali'},
+ {text:'the quiet thing happened again',speaker:'alex'},
  {text:'the quiet thing is back',speaker:'james'},
- {text:'the quiet thing, all week',speaker:'anjali'},
+ {text:'the quiet thing, all week',speaker:'alex'},
 ];
 t('AUTOMATIC — a repeated phrase surfaces as a candidate', () => {
   const {james}=pair();

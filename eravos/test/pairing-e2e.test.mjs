@@ -18,14 +18,14 @@ const dev = (origin) => new Pairing({ store: mkStore(), now: () => CLOCK,
 const ORIGIN = 'https://eravos.anonymousservers.info';
 const RELAY  = 'wss://eravos.anonymousservers.info/relay';
 const JAMES  = { peerId: 'eravos-9x4kd02m', pubFingerprint: 'fp-a91c', relay: RELAY };
-const ANJALI = { peerId: 'eravos-7ba1qq83', name: 'Anjali' };
+const ALEX = { peerId: 'eravos-7ba1qq83', name: 'Alex' };
 
 let pass=0,fail=0;
 const t=(n,f)=>{try{CLOCK=1_700_000_000_000;f();console.log('  ok  - '+n);pass++}catch(e){console.log('  FAIL- '+n+'\n        '+e.message);fail++}};
 
 console.log('\npairing e2e — she scans the QR');
 t('QR -> parse -> scan -> receive -> confirm, both sides land PAIRED', () => {
-  const james = dev(ORIGIN), anjali = dev(ORIGIN);
+  const james = dev(ORIGIN), alex = dev(ORIGIN);
   const minted = james.createInvite(JAMES);
   assert.strictEqual(minted.relayReachable, true, 'refusing to test a code the app itself would warn about');
 
@@ -34,17 +34,17 @@ t('QR -> parse -> scan -> receive -> confirm, both sides land PAIRED', () => {
   assert.strictEqual(scanned.relay, RELAY, 'the QR must carry the rendezvous');
 
   // Her device.
-  const req = anjali.scan(scanned, ANJALI);
+  const req = alex.scan(scanned, ALEX);
   assert.strictEqual(req.relayUsable, true);
-  assert.strictEqual(anjali.state().state, 'requested');
-  assert.strictEqual(anjali.state().paired, false, 'scanning must not pair');
+  assert.strictEqual(alex.state().state, 'requested');
+  assert.strictEqual(alex.state().paired, false, 'scanning must not pair');
 
   // Across the relay, to his device.
-  const recv = james.receiveRequest({ code: scanned.code, myPeerId: ANJALI.peerId, myName: ANJALI.name });
+  const recv = james.receiveRequest({ code: scanned.code, myPeerId: ALEX.peerId, myName: ALEX.name });
   assert.strictEqual(recv.ok, true, recv.reason);
-  const done = james.confirm({ name: ANJALI.name });
+  const done = james.confirm({ name: ALEX.name });
   assert.strictEqual(done.state, 'paired');
-  assert.strictEqual(james.state().partner.peerId, ANJALI.peerId);
+  assert.strictEqual(james.state().partner.peerId, ALEX.peerId);
 });
 
 console.log('\npairing e2e — she types the code during sign-up');
@@ -53,7 +53,7 @@ t('the DEEP LINK form carries the rendezvous too', () => {
   james.createInvite(JAMES);
   const parsed = Pairing.parse(james.inviteDeepLink());
   assert.strictEqual(parsed.relay, RELAY);
-  assert.strictEqual(dev(ORIGIN).scan(parsed, ANJALI).relayUsable, true);
+  assert.strictEqual(dev(ORIGIN).scan(parsed, ALEX).relayUsable, true);
 });
 t('the pasted DOT-JOINED code is the same payload, and still pairs', () => {
   const james = dev(ORIGIN);
@@ -63,10 +63,10 @@ t('the pasted DOT-JOINED code is the same payload, and still pairs', () => {
   const parsed = Pairing.parse(decodeURIComponent(pasted));
   assert.strictEqual(parsed.relay, RELAY);
 
-  const anjali = dev(ORIGIN);
-  anjali.scan(parsed, ANJALI);
-  assert.strictEqual(james.receiveRequest({ code: parsed.code, myPeerId: ANJALI.peerId, myName: 'Anjali' }).ok, true);
-  assert.strictEqual(james.confirm({ name: 'Anjali' }).state, 'paired');
+  const alex = dev(ORIGIN);
+  alex.scan(parsed, ALEX);
+  assert.strictEqual(james.receiveRequest({ code: parsed.code, myPeerId: ALEX.peerId, myName: 'Alex' }).ok, true);
+  assert.strictEqual(james.confirm({ name: 'Alex' }).state, 'paired');
 });
 t('THE BARE 8-CHAR CODE IS REFUSED — it names nobody and reaches nothing', () => {
   const james = dev(ORIGIN);
@@ -87,14 +87,14 @@ t('a code minted from a LOCALHOST origin is caught before it is sent', () => {
   assert.strictEqual(james.health().inviteRelayReachable, false);
 
   // And her side refuses to adopt it rather than connecting to herself.
-  const anjali = dev(ORIGIN);
-  assert.strictEqual(anjali.scan(Pairing.parse(minted.url), ANJALI).relay, null);
+  const alex = dev(ORIGIN);
+  assert.strictEqual(alex.scan(Pairing.parse(minted.url), ALEX).relay, null);
 });
 t('both sides agree on ONE relay — that is the whole point of the field', () => {
   const james = dev(ORIGIN);
   james.createInvite(JAMES);
-  const anjali = dev('http://localhost:4020');       // her desktop build, her own origin
-  const r = anjali.scan(Pairing.parse(james.inviteUrl()), ANJALI);
+  const alex = dev('http://localhost:4020');       // her desktop build, her own origin
+  const r = alex.scan(Pairing.parse(james.inviteUrl()), ALEX);
   assert.strictEqual(r.relay, RELAY,
     'she must adopt HIS relay — deriving her own is the bug this exists to close');
 });

@@ -117,7 +117,7 @@ worse than an absent one (§1.2).
 - [ ] **Two-device verification.** Same exit-criteria discipline as Phase 1:
       cursor and tab presence across a real network, not a mocked one. This
       environment cannot run it.
-- [x] **Presence in the shell.** A quiet line — *"Anjali is in Vault"* —
+- [x] **Presence in the shell.** A quiet line — *"Alex is in Vault"* —
       above the ticker, hidden entirely when there is nothing to say. An
       always-visible "not connected" is a nag, not information.
 - [x] **Co-navigation.** "go with them" opens the tab they are on and carries

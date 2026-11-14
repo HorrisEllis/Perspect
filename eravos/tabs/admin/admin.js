@@ -142,8 +142,8 @@
       '<div class="adm-warn">Same person, new label. Every one of their ' + u.dataKeys +
         ' data keys moves with them. Peer identity and crypto keys are preserved — ' +
         'they are still the same party to the connection.</div>' +
-      '<label>New account key (a–z 0–9 _ -)</label><input id="r-key-' + esc(u.key) + '" placeholder="e.g. anjali">' +
-      '<label>New display name</label><input id="r-name-' + esc(u.key) + '" placeholder="e.g. Anjali">' +
+      '<label>New account key (a–z 0–9 _ -)</label><input id="r-key-' + esc(u.key) + '" placeholder="e.g. alex">' +
+      '<label>New display name</label><input id="r-name-' + esc(u.key) + '" placeholder="e.g. Alex">' +
       '<div class="flex gap10 mt8"><button class="btn" onclick="admRename(\'' + esc(u.key) + '\')">Rename &amp; move data</button></div>' +
     '</div>';
   }
@@ -155,8 +155,8 @@
         'feelings, ruptures and history are theirs. The co-creation pairing is torn down, a new ' +
         'peer identity is issued, and crypto keys are regenerated. An export is taken first, ' +
         'automatically, whatever you choose below.</div>' +
-      '<label>New account key</label><input id="p-key-' + esc(u.key) + '" placeholder="e.g. anjali">' +
-      '<label>New display name</label><input id="p-name-' + esc(u.key) + '" placeholder="e.g. Anjali">' +
+      '<label>New account key</label><input id="p-key-' + esc(u.key) + '" placeholder="e.g. alex">' +
+      '<label>New display name</label><input id="p-name-' + esc(u.key) + '" placeholder="e.g. Alex">' +
       '<label>Login password for the new account</label><input id="p-pass-' + esc(u.key) + '" type="password" placeholder="required">' +
       '<label>What happens to ' + esc(u.name) + '\'s data</label>' +
       '<select id="p-disp-' + esc(u.key) + '">' +
